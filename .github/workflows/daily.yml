@@ -40,8 +40,7 @@ jobs:
                --jq '[.artifacts[] | select(.expired == false)][0].id // empty' || true)
           if [ -n "${ID}" ]; then
             echo "복원: Actions artifact #${ID}"
-            gh api -H "Accept: application/octet-stream" \
-              "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ID}/zip" > artifact.zip
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ID}/zip" > artifact.zip
             unzip -o artifact.zip -d db/
             rm artifact.zip
           fi
