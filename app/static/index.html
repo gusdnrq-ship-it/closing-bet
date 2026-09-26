@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>종가배팅 대시보드</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<header>
+  <div class="head-left">
+    <h1>종가배팅</h1>
+    <span class="sub">내일 종가 방향 베팅 시그널 · 적중률 스코어보드</span>
+  </div>
+  <div class="head-right">
+    <div id="status" class="status">불러오는 중…</div>
+    <button id="scanBtn">스캔 실행</button>
+  </div>
+</header>
+
+<main>
+  <section>
+    <h2>오늘의 후보 <span id="todayDate" class="tag"></span></h2>
+    <div id="today" class="card">로딩…</div>
+  </section>
+
+  <section>
+    <h2>스코어보드 (방향 적중률)</h2>
+    <div id="scoreboard" class="card">로딩…</div>
+  </section>
+
+  <section>
+    <h2>최근 결과</h2>
+    <div class="card table-wrap"><table id="results"><thead>
+      <tr><th>시그널일</th><th>종목</th><th>전략</th><th>방향</th><th>진입가</th><th>판정일</th><th>종가</th><th>등락</th><th>판정</th></tr>
+    </thead><tbody></tbody></table></div>
+  </section>
+
+  <section>
+    <h2>종목 조회</h2>
+    <div class="search">
+      <input id="codeInput" placeholder="종목코드 6자리 (예: 005930)" maxlength="6">
+      <button id="searchBtn">조회</button>
+      <span id="stockName" class="tag"></span>
+    </div>
+    <div class="card"><canvas id="chart" height="90"></canvas></div>
+    <div class="card table-wrap"><table id="stockSignals"><thead>
+      <tr><th>시그널일</th><th>전략</th><th>방향</th><th>진입가</th><th>판정</th><th>결제가</th></tr>
+    </thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="disclaimer">
+    <h2>유의사항</h2>
+    <p>시그널은 참고용 정보이며 매매 추천이 아닙니다. 적중률은 표본수와 함께 확인하세요.
+       표본 10건 미만은 통계적 유의성이 없습니다. 데이터 출처: 네이버 증권 (read-only).</p>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

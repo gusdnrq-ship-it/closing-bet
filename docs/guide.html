@@ -1,0 +1,212 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>종가배팅 사용법</title>
+<style>
+  @page { size: A4; margin: 14mm 13mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Malgun Gothic", "맑은 고딕", sans-serif;
+    color: #1e2537; font-size: 10.5pt; line-height: 1.55; margin: 0;
+  }
+  h1 { font-size: 22pt; margin: 0 0 2mm; color: #111827; }
+  h2 {
+    font-size: 14pt; margin: 7mm 0 2.5mm; padding-bottom: 1.5mm;
+    border-bottom: 2.5px solid #f0b429; color: #111827;
+  }
+  h3 { font-size: 11.5pt; margin: 4mm 0 1.5mm; color: #374151; }
+  p { margin: 1.5mm 0; }
+  .sub { color: #6b7280; font-size: 11pt; margin-bottom: 5mm; }
+  .badge {
+    display: inline-block; background: #1f2937; color: #ffd76a;
+    padding: 1mm 3mm; border-radius: 3mm; font-size: 9.5pt; font-weight: bold;
+    margin-right: 2mm;
+  }
+  .rule {
+    background: #fff8e6; border: 1px solid #f0b429; border-left: 5px solid #f0b429;
+    padding: 3mm 4mm; border-radius: 2mm; margin: 3mm 0;
+  }
+  .rule b { color: #92400e; }
+  .tip {
+    background: #eef4ff; border-left: 5px solid #4d9fff;
+    padding: 3mm 4mm; border-radius: 2mm; margin: 3mm 0;
+  }
+  .warn {
+    background: #fdeeee; border-left: 5px solid #e05252;
+    padding: 3mm 4mm; border-radius: 2mm; margin: 3mm 0;
+  }
+  pre {
+    background: #171e2e; color: #e8edf7; padding: 3mm 4mm; border-radius: 2mm;
+    font-family: Consolas, monospace; font-size: 10pt; line-height: 1.6;
+    margin: 2mm 0; white-space: pre-wrap;
+  }
+  pre .c { color: #8b97ad; }   /* 주석 */
+  pre .g { color: #ffd76a; }   /* 강조 */
+  table { border-collapse: collapse; width: 100%; font-size: 10pt; margin: 2mm 0; }
+  th, td { border: 1px solid #d4d9e3; padding: 2mm 2.5mm; text-align: left; vertical-align: top; }
+  th { background: #f3f4f8; font-weight: bold; }
+  figure { margin: 2mm 0; page-break-inside: avoid; }
+  figure img { width: 84%; display: block; margin: 0 auto; border: 1px solid #c9cfdb; border-radius: 2mm; }
+  figcaption { font-size: 9pt; color: #6b7280; margin-top: 1mm; margin-bottom: 1mm; }
+  .flow { page-break-inside: avoid; margin: 3mm 0; }
+  .pagebreak { page-break-before: always; }
+  .num {
+    display: inline-block; width: 5.5mm; height: 5.5mm; line-height: 5.5mm;
+    text-align: center; background: #f0b429; color: #111;
+    border-radius: 50%; font-weight: bold; font-size: 9.5pt; margin-right: 1.5mm;
+  }
+  ul { margin: 1.5mm 0; padding-left: 6mm; }
+  li { margin: 1mm 0; }
+  .footer { margin-top: 6mm; padding-top: 2mm; border-top: 1px solid #d4d9e3;
+            font-size: 9pt; color: #9ca3af; }
+</style>
+</head>
+<body>
+
+<h1>종가배팅 사용법</h1>
+<p class="sub">내일 종가가 오를까 내릴까 — 방향을 예측해 적중률을 쌓는 시그널 대시보드 (3분 이해)</p>
+
+<p>
+  <span class="badge">규칙 1</span>T일 <b>종가</b>로 시그널 발생
+  <span class="badge">규칙 2</span><b>다음 거래일 종가</b>로 적중/미달 판정
+  <span class="badge">규칙 3</span>스코어보드는 적중률 + 표본수만
+</p>
+
+<h2>1. 어떤 원리인가요?</h2>
+
+<div class="flow">
+<svg viewBox="0 0 810 205" width="100%" font-family="Malgun Gothic, 맑은 고딕, sans-serif">
+  <defs>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+  <!-- 박스들 -->
+  <g font-size="13.5" font-weight="bold" text-anchor="middle">
+    <rect x="8"   y="30" width="168" height="64" rx="9" fill="#eef4ff" stroke="#4d9fff" stroke-width="2"/>
+    <text x="92" y="55" fill="#1d4ed8">① T일 장 마감</text>
+    <text x="92" y="76" font-size="11.5" font-weight="normal" fill="#374151">오늘 종가 확정</text>
+
+    <rect x="216" y="30" width="178" height="64" rx="9" fill="#fff8e6" stroke="#f0b429" stroke-width="2"/>
+    <text x="305" y="55" fill="#92400e">② 스캔 실행</text>
+    <text x="305" y="76" font-size="11.5" font-weight="normal" fill="#374151">시그널 후보 발표</text>
+
+    <rect x="444" y="30" width="168" height="64" rx="9" fill="#eef4ff" stroke="#4d9fff" stroke-width="2"/>
+    <text x="528" y="55" fill="#1d4ed8">③ 다음 거래일</text>
+    <text x="528" y="76" font-size="11.5" font-weight="normal" fill="#374151">장 마감 · 종가 확정</text>
+
+    <rect x="652" y="30" width="130" height="64" rx="9" fill="#f3f4f8" stroke="#6b7280" stroke-width="2"/>
+    <text x="717" y="55" fill="#111827">④ 판정</text>
+    <text x="717" y="76" font-size="11.5" font-weight="normal" fill="#374151">종가 비교</text>
+  </g>
+  <!-- 화살표 -->
+  <g stroke="#4b5563" stroke-width="2.5" marker-end="url(#ar)">
+    <line x1="176" y1="62" x2="212" y2="62"/>
+    <line x1="394" y1="62" x2="440" y2="62"/>
+    <line x1="612" y1="62" x2="648" y2="62"/>
+  </g>
+  <!-- 결과 분기 -->
+  <g stroke="#4b5563" stroke-width="2.5" fill="none" marker-end="url(#ar)">
+    <line x1="717" y1="94"  x2="717" y2="112"/>
+    <path d="M717,112 L677,112 L677,120"/>
+    <path d="M717,112 L757,112 L757,120"/>
+  </g>
+  <g font-size="13" font-weight="bold" text-anchor="middle">
+    <rect x="635" y="124" width="84" height="34" rx="8" fill="#e7f7ec" stroke="#22a553" stroke-width="2"/>
+    <text x="677" y="146" fill="#15803d">적중 ✅</text>
+    <rect x="715" y="124" width="84" height="34" rx="8" fill="#fdeeee" stroke="#e05252" stroke-width="2"/>
+    <text x="757" y="146" fill="#b91c1c">미달 ❌</text>
+  </g>
+  <!-- 하단 설명 -->
+  <g font-size="12" fill="#374151">
+    <text x="92"  y="128" text-anchor="middle">예) 9/23(수) 종가로</text>
+    <text x="92"  y="147" text-anchor="middle">시그널 생성</text>
+    <text x="305" y="128" text-anchor="middle">"내일 오른다(상승 ↑)"</text>
+    <text x="305" y="147" text-anchor="middle">후보 62건 같은 경우</text>
+    <text x="528" y="128" text-anchor="middle">9/24(목) 종가로</text>
+    <text x="528" y="147" text-anchor="middle">자동 판정</text>
+  </g>
+  <rect x="8" y="172" width="794" height="26" rx="6" fill="#171e2e"/>
+  <text x="405" y="190" text-anchor="middle" font-size="12.5" fill="#ffd76a" font-weight="bold">
+    판정 결과는 스코어보드에 누적 → 전략별 "방향 적중률"로 표시
+  </text>
+</svg>
+</div>
+
+<div class="tip">
+  <b>왜 "장 마감 후"에 실행하나요?</b><br>
+  시그널도 판정도 전부 <b>종가</b> 기준입니다. 장이 끝나고(15:30) 네이버 증권에 종가가 반영된 후에
+  실행해야 오늘 데이터가 잡힙니다. <b>오후 늦은 저녁</b>에 하루 1번 돌리면 되고,
+  다음 거래일 판정은 그 다음 날 실행할 때 자동으로 계산됩니다.
+</div>
+
+<h2>2. 딱 3가지 명령</h2>
+
+<h3><span class="num">1</span>처음 딱 1회 — 준비 (프로젝트 폴더에서)</h3>
+<pre>python run.py universe     <span class="c"># 코스피·코스닥 전체 종목 목록 받기 (~2,506종목)</span>
+python run.py backfill     <span class="c"># 5년치 가격 데이터 받기 (~10분, 1회면 끝)</span></pre>
+
+<h3><span class="num">2</span>매일 1회 — 스캔 (장 마감 후)</h3>
+<pre>python run.py refresh      <span class="c"># 오늘자 종가 추가 (증분)</span>
+python run.py scan         <span class="c"># 오늘 시그널 생성 + 어제 시그널 판정</span></pre>
+
+<h3><span class="num">3</span>보기 — 대시보드 켜기</h3>
+<pre>python run.py serve        <span class="c"># 브라우저에서 http://127.0.0.1:8788 접속</span></pre>
+
+<div class="tip">
+  <b>명령을 안 쳐도 됩니다.</b> 대시보드 오른쪽 위 <b>[스캔 실행]</b> 버튼을 누르면
+  scan(판정 + 시그널 생성)이 바로 실행됩니다. 다만 <b>오늘 종가를 받으려면 먼저 refresh가</b>
+  필요하므로, 완전히 자동이 아니라면 위 2줄을 지키는 게 가장 안전합니다.
+</div>
+
+<h2 class="pagebreak">3. 대시보드 화면 읽는 법</h2>
+
+<figure>
+  <img src="file:///C:/Users/kho/Documents/Default Project/closing-bet/docs/cropA.png">
+  <figcaption>① 헤더 — 종목 수·기준일·데이터 행수·시그널 수·마지막 스캔 시각 (오른쪽 위 노란 [스캔 실행] 버튼) |
+  ② 오늘의 후보 — T일에 발생한 시그널 목록. 각 행은 "내일 종가가 오를 것"이라는 베팅 후보이며, 근거(돌파 가격·거래량 배수)가 함께 표시됩니다.</figcaption>
+</figure>
+
+<figure>
+  <img src="file:///C:/Users/kho/Documents/Default Project/closing-bet/docs/cropB.png">
+  <figcaption>③ 스코어보드 — 전체·전략별 적중률. 아직 판정이 없으면 "판정 데이터 없음" + 경고문이 뜹니다.
+  노란 경고창은 전략의 한계(caveats)로, <b>항상 읽고 판단</b>해야 합니다. |
+  ④ 최근 결과 — 시그널일·진입가·판정일·종가·등락·판정(적중/미달/대기)이 한 줄로 쌓입니다.</figcaption>
+</figure>
+
+<figure>
+  <img src="file:///C:/Users/kho/Documents/Default Project/closing-bet/docs/cropC.png">
+  <figcaption>⑤ 종목 조회 — 6자리 종목코드(예: 005930) 입력 후 [조회] → 최근 1년 종가 차트와 그 종목의 시그널 이력이 표시됩니다.
+  차트의 점 = 시그널 발생일(빨강=상승 베팅, 파랑=하락 베팅). | ⑥ 유의사항 — 시그널은 참고용이며 매매 추천이 아닙니다.</figcaption>
+</figure>
+
+<h2>4. 스코어보드를 올바르게 읽는 법</h2>
+
+<table>
+  <tr><th style="width:26mm">표시</th><th>의미</th></tr>
+  <tr><td><b>적중률 %</b></td><td>시그널이 실제와 같은 방향으로 끝난 비율 (방향만, 손익 금액은 없습니다)</td></tr>
+  <tr><td><b>표본수</b></td><td>판정된 건수. <b>10건 미만이면 통계적 의미가 없으므로</b> 숫자만 보고 결론 금지</td></tr>
+  <tr><td><b>대기(PENDING)</b></td><td>아직 다음 거래일 종가가 나오지 않아 판정 전</td></tr>
+  <tr><td><b>무효(VOID)</b></td><td>상장폐지·거래정지 등으로 판정할 수 없음 (30일 내 미판정 시)</td></tr>
+  <tr><td><b>⚠ 경고문</b></td><td>전략별 caveats — 예: "돌파 당일 많이 오른 종목은 익일 되돌림이 잦다"</td></tr>
+</table>
+
+<h2>5. 자주 묻는 질문</h2>
+<ul>
+  <li><b>몇 시에 실행해야 하나요?</b> — 장 마감(15:30) 후 네이버 반영이 끝난 저녁에 하루 1번. 이틀에 한 번만 써도 판정은 정상 누적됩니다.</li>
+  <li><b>판정은 언제 되나요?</b> — 시그널 다음 거래일 종가가 반영된 후 scan을 돌리면 자동으로 적중/미달이 붙습니다.</li>
+  <li><b>매매 추천인가요?</b> — 아닙니다. 참고용 정보이며 실제 매매 판단과 책임은 본인에게 있습니다.</li>
+  <li><b>시그널이 매일 없나요?</b> — 신호가 없을 수 있습니다(쌍굴파기 전략은 매우 드물게 발생). 없는 날이 정상입니다.</li>
+  <li><b>데이터는 어디서?</b> — 네이버 증권 read-only API. 유니버스 1회 + 가격 데이터 갱신은 인터넷만 있으면 됩니다.</li>
+</ul>
+
+<div class="warn">
+  <b>유의사항</b> — 적중률은 항상 표본수와 함께 확인하세요. 표본 10건 미만은 우연일 수 있습니다.
+  전략은 과거 데이터로 검증했으나 미래 수익을 보장하지 않습니다.
+</div>
+
+<p class="footer">종가배팅 · 로컬 대시보드 (http://127.0.0.1:8788) · 데이터 출처: 네이버 증권 · 문서 생성 2026-09-26</p>
+
+</body>
+</html>
