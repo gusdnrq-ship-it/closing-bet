@@ -36,8 +36,11 @@ python run.py serve           # 대시보드 http://127.0.0.1:8788
 |----|------|------|
 | `breakout` | 20일 신고가 돌파 + 거래량 급증 | 종가 > 직전 20일 고가 AND 거래량 ≥ 1.5× 20일 평균 → UP |
 | `ssanggul_bollinger` | 쌍굴파기 이중 볼린저밴드 | technical-trading 1호 전략 재구현 (원본 caveats 승계, 빈번한 신호 아님) |
+| `bnf_oversold` | BNF 이격도 80 역반등 매수 | 당일 ≤ -2% 급락 AND 이격도(60일MA) ≤ 80 AND RSI ≤ 30 AND MACD 히스토그램 음수 → UP (유튜브 쇼츠 학습, 파라미터 일부 가정) |
 
-파라미터는 `config.py`에서 조정합니다 (`BREAKOUT_*`, `SSANGGUL_*`).
+파라미터는 `config.py`에서 조정합니다 (`BREAKOUT_*`, `SSANGGUL_*`, `BNF_*`).
+
+과거 재생 백테스트: `python run.py backtest --days 360` (0=전체 기간, `--strategy`로 지정).
 
 ## 구조
 

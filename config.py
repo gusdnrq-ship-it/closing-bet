@@ -32,6 +32,16 @@ SSANGGUL_TREND_FILTER = True
 SSANGGUL_TREND_LOOKBACK = 20
 SSANGGUL_TREND_MIN_SLOPE = 0.0
 
+# BNF 이격도 역반등 (유튜브 쇼츠 — 파라미터 일부는 영상 미명시로 가정)
+BNF_MA_PERIOD = 60        # 이격도 기준 이동평균 (가정: 영상 미명시)
+BNF_DEV_MAX = 80.0        # 이격도 하한 — 종가/MA×100 ≤ 80
+BNF_RSI_PERIOD = 14
+BNF_RSI_MAX = 30.0        # RSI 과매도
+BNF_MACD_FAST = 12
+BNF_MACD_SLOW = 26
+BNF_MACD_SIGNAL = 9
+BNF_DROP_MAX = -2.0       # "강한 하락" = 당일 등락률 ≤ -2% (가정: 영상 미명시)
+
 # 서버
 HOST = "127.0.0.1"
 PORT = 8788

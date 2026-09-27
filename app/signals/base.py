@@ -12,11 +12,12 @@ caveats에는 전략의 한계를 미화하지 않고 그대로 적는다 — �
 """
 from importlib import import_module
 
-from app.signals import breakout, ssanggul
+from app.signals import bnf_oversold, breakout, ssanggul
 
 REGISTRY = {
     breakout.STRATEGY_META["name"]: breakout,
     ssanggul.STRATEGY_META["name"]: ssanggul,
+    bnf_oversold.STRATEGY_META["name"]: bnf_oversold,
 }
 
 

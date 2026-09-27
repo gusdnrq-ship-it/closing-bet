@@ -6,6 +6,7 @@
     python run.py backfill --sample 5   # 샘플 5종목만 (검증용)
     python run.py refresh           # 최근 데이터 증분 갱신
     python run.py scan              # 시그널 스캔 + 정산
+    python run.py backtest          # 전 전략 백테스트 (기본 360거래일, --days 0=전체)
     python run.py export            # 정적 대시보드 JSON/site 발행
     python run.py status            # 현재 상태 요약
     python run.py serve             # 대시보드 실행 (http://127.0.0.1:8788)
@@ -40,7 +41,13 @@ def main():
     bf.add_argument("--codes", nargs="*", help="지정 종목코드만")
 
     sub.add_parser("refresh", help="최근 데이터 증분 갱신")
-    sub.add_parser("scan", help="시그널 스캔 + 정산")
+    sc = sub.add_parser("scan", help="시그널 스캔 + 정산")
+    sc.add_argument("--strategy", nargs="*", help="지정 전략만 (기본 전체)")
+
+    bt = sub.add_parser("backtest", help="전 전략 과거 재생 백테스트")
+    bt.add_argument("--days", type=int, default=360, help="최근 N거래일 (0=전체)")
+    bt.add_argument("--strategy", nargs="*", help="지정 전략만 (기본 전체)")
+
     sub.add_parser("export", help="정적 대시보드 JSON/site 발행")
     sub.add_parser("status", help="현재 상태 요약")
 
@@ -78,9 +85,15 @@ def main():
         export.export_api(conn)
 
     elif args.cmd == "scan":
-        res = scanner.run_scan(conn)
+        res = scanner.run_scan(conn, strategy_names=args.strategy)
         print(res)
         export.export_api(conn)
+
+    elif args.cmd == "backtest":
+        import json
+        from app import backtest
+        res = backtest.run(conn, strategy_names=args.strategy, days=args.days)
+        print(json.dumps(res, ensure_ascii=False, indent=2))
 
     elif args.cmd == "export":
         st = export.run(conn)

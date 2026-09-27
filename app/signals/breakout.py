@@ -17,6 +17,17 @@ STRATEGY_META = {
 MIN_ROWS = config.BREAKOUT_LOOKBACK + 5
 
 
+def conditions(df: pd.DataFrame) -> pd.Series:
+    """전체 기간 돌파 조건 부울 시리즈 (백테스트용)."""
+    lb = config.BREAKOUT_LOOKBACK
+    if len(df) < MIN_ROWS:
+        return pd.Series(False, index=df.index)
+    prev_high = df["high"].shift(1).rolling(lb).max()
+    vol_avg = df["volume"].shift(1).rolling(lb).mean()
+    ok = (df["close"] > prev_high) & (df["volume"] >= config.BREAKOUT_VOL_MULT * vol_avg)
+    return ok.fillna(False)
+
+
 def generate(df: pd.DataFrame) -> dict | None:
     lookback = config.BREAKOUT_LOOKBACK
     if len(df) < MIN_ROWS:
