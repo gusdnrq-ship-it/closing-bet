@@ -12,7 +12,7 @@ async function api(path, opts) {
 
 // 정적 JSON (로컬 serve · GitHub Pages 공용 — export로 생성)
 async function staticApi(name) {
-  return api(`/static/api/${name}.json`);
+  return api(`static/api/${name}.json`);
 }
 
 async function loadStatus() {
@@ -190,7 +190,7 @@ async function runScan() {
   btn.disabled = true;
   btn.textContent = "스캔 중…";
   try {
-    const r = await api("/api/scan", { method: "POST" });
+    const r = await api("api/scan", { method: "POST" });
     if (!r.ok) throw new Error(r.error || "스캔 실패");
     btn.textContent = `신규 ${r.new_signals}건 · 판정 ${r.settled.HIT + r.settled.MISS}건`;
     await Promise.all([loadStatus(), loadToday(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults()]);
@@ -241,7 +241,7 @@ async function searchStock() {
   const code = $("#codeInput").value.trim();
   if (!/^\d{6}$/.test(code)) { $("#stockName").textContent = "6자리 숫자 코드를 입력하세요"; return; }
   try {
-    const d = await api(`/api/stock/${code}`);
+    const d = await api(`api/stock/${code}`);
     $("#stockName").textContent = `${d.stock.name} (${code}) · ${d.stock.market || ""}`;
     renderChart(d);
     setChartVisible(true);
