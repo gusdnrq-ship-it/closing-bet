@@ -42,14 +42,14 @@ async function loadToday() {
       <td>${STRAT_KO[s.strategy] || s.strategy}</td>
       <td class="dir-${s.direction}">${s.direction === "UP" ? "상승 ↑" : "하락 ↓"}</td>
       <td>${fmt(s.entry_close)}</td>
-      <td>${s.dev ?? "-"} / ${s.rsi ?? "-"} / ${money(s.money5)}</td>
+      <td>${s.dev ?? "-"} / ${s.rsi ?? "-"} / ${money(s.money5)} / ${s.dist_high ?? "-"}%</td>
       <td>${s.score ?? "-"}</td>
       <td class="st-${s.status}">${STATUS_KO[s.status]}</td>
     </tr>`).join("");
   $("#today").className = "card table-wrap";
   $("#today").innerHTML = `<table><thead><tr>
     <th>순위</th><th>종목</th><th>전략</th><th>방향</th><th>진입 종가</th>
-    <th>이격도 / RSI / 5일대금</th><th>점수</th><th>상태</th>
+    <th>이격도 / RSI / 5일대금 / 신고가대비</th><th>점수</th><th>상태</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
 }
 
