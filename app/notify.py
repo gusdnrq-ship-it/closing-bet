@@ -1,14 +1,16 @@
 """알림 전송 — 매일 런 후 오늘의 스캔·판정·매도 결과를 보낸다.
 
 채널 우선순위:
-    1. DISCORD_WEBHOOK_URL 설정 시 → Discord 웹훅
-    2. 아니면 Actions 환경(GITHUB_TOKEN + GITHUB_REPOSITORY)이면 → GitHub 이슈에 댓글 자동 추가
-       (이슈 하나("📡 일일 알림")에 날짜순으로 쌓임 — 추가 설정 불필요)
-    3. 둘 다 없으면 → 메시지를 로컬에 출력하고 건너뜀 (종료코드 0, 런 중단 없음)
+    1. TELEGRAM_BOT_TOKEN → 텔레그램 (CHAT_ID 미설정 시 getUpdates로 자동 추출)
+    2. DISCORD_WEBHOOK_URL → Discord 웹훅
+    3. Actions 환경(GITHUB_TOKEN + GITHUB_REPOSITORY) → GitHub 이슈에 댓글 자동 추가
+    4. 둘 다 없으면 → 메시지를 로컬에 출력하고 건너뜀 (종료코드 0, 런 중단 없음)
 실행: python run.py notify   (export 직후 — app/static/api/*.json 읽음)
 """
 import json
 import os
+import sys
+import urllib.error
 import urllib.request
 
 import config
@@ -16,6 +18,15 @@ import config
 API_DIR = config.BASE_DIR / "app" / "static" / "api"
 PAGES_URL = "https://gusdnrq-ship-it.github.io/closing-bet/"
 ISSUE_TITLE = "📡 일일 알림"
+
+
+def say(text: str) -> None:
+    """cp949 콘솔에서도 이모지·한글이 깨지지 않게 안전 출력."""
+    enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        print(text.encode(enc, errors="replace").decode(enc))
 
 STRAT_KO = {"breakout": "신고가 돌파", "ssanggul_bollinger": "쌍굴파기", "bnf_oversold": "BNF 역반등"}
 STATE_KO = {"PENDING": "진입대기", "LIVE": "보유", "TP": "익절", "SL": "손절"}
@@ -114,6 +125,47 @@ def _send_discord(url: str, msg: str) -> str:
     return f"Discord 전송 완료 (HTTP {status})"
 
 
+def _tg_api(token: str, method: str, payload: dict, timeout: int = 15) -> dict:
+    return _post(
+        f"https://api.telegram.org/bot{token}/{method}", payload,
+        {"User-Agent": "closing-bet-notify"}, timeout,
+    )[1]
+
+
+def _resolve_chat_id(token: str) -> str:
+    """TELEGRAM_CHAT_ID 미설정 시 getUpdates로 가장 최근 발신자의 chat_id 추출."""
+    resp = _tg_api(token, "getUpdates", {})
+    for u in reversed(resp.get("result") or []):
+        chat = (u.get("message") or u.get("channel_post") or {}).get("chat")
+        if chat and chat.get("id") is not None:
+            return str(chat["id"])
+    return ""
+
+
+def _send_telegram(token: str, chat_id: str, msg: str) -> str:
+    if not chat_id:
+        chat_id = _resolve_chat_id(token)
+        if not chat_id:
+            raise RuntimeError(
+                "chat_id 추출 실패 — 봇에게 아무 메시지 1개 먼저 보내주세요 "
+                "(getUpdates에 발신이 있어야 추출 가능)"
+            )
+    md = msg.replace("**", "*")  # Discord/GitHub **bold** → 텔레그램 *bold*
+    try:
+        resp = _tg_api(token, "sendMessage", {
+            "chat_id": chat_id, "text": md[:4096], "parse_mode": "Markdown",
+        })
+    except urllib.error.HTTPError as e:
+        if e.code != 400:
+            raise
+        resp = _tg_api(token, "sendMessage", {  # 마크다운 파싱 실패 → 일반 텍스트 재시도
+            "chat_id": chat_id, "text": msg[:4096],
+        })
+    if not resp.get("ok"):
+        raise RuntimeError(f"telegram 응답 오류: {resp}")
+    return f"텔레그램 전송 완료 (chat_id {chat_id[:6]}…)"
+
+
 def _send_github(msg: str) -> str:
     tok = (os.environ.get("GITHUB_TOKEN") or "").strip()
     repo = (os.environ.get("GITHUB_REPOSITORY") or "").strip()
@@ -142,17 +194,21 @@ def _send_github(msg: str) -> str:
 
 def run() -> str:
     msg = compose()
-    url = (os.environ.get("DISCORD_WEBHOOK_URL") or "").strip()
+    token = (os.environ.get("TELEGRAM_BOT_TOKEN") or "").strip()
+    chat_id = (os.environ.get("TELEGRAM_CHAT_ID") or "").strip()
+    discord_url = (os.environ.get("DISCORD_WEBHOOK_URL") or "").strip()
     try:
-        if url:
-            return _send_discord(url, msg)
+        if token:
+            return _send_telegram(token, chat_id, msg)
+        if discord_url:
+            return _send_discord(discord_url, msg)
         gh = _send_github(msg)
         if gh:
             return gh
-        print("── 전송하지 않은 메시지 (채널 미설정) ──")
-        print(msg)
-        return "알림 채널 미설정 (Discord/GitHub 둘 다 없음) — 건너뜀"
+        say("── 전송하지 않은 메시지 (채널 미설정) ──")
+        say(msg)
+        return "알림 채널 미설정 (텔레그램/디스코드/GitHub 둘 다 없음) — 건너뜀"
     except Exception as e:
-        print("── 전송 실패한 메시지 ──")
-        print(msg)
+        say("── 전송 실패한 메시지 ──")
+        say(msg)
         return f"알림 전송 실패 (워크플로우는 계속): {e}"

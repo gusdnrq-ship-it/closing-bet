@@ -18,17 +18,18 @@
 - 수동 실행: GitHub Actions 탭 → `daily-update` → **Run workflow**
 - 웹 버전은 **조회 전용** (스캔·차트 API는 로컬 `serve` 전용, 웹에서는 정적 JSON으로 시그널 이력·후보 제공)
 
-## 알림 (Discord 웹훅 · GitHub 이슈 자동 대체)
+## 알림 (텔레그램 → 디스코드 → GitHub 이슈 자동 폴백)
 
 매일 런 직후 오늘의 스캔 결과를 보낸다 (`app/notify.py` → `python run.py notify`).
 
 - 알림 내용: 시그널 수(전략별 분포) · ★ 선택 목록(신고가 돌파폭) · 최근 판정 배치 적중률 · 매도 추적 상태(TP/SL/보유) · 오늘 청산 건 · 대시보드 링크
-- **채널 자동 선택 (추가 설정 불필요)**:
-  1. `DISCORD_WEBHOOK_URL` 시크릿이 있으면 → Discord로 전송
-  2. 없으면(Actions 기본) → 저장소 이슈 **`📡 일일 알림`** 에 자동 댓글 (날짜순으로 쌓임, GitHub 알림으로 수신)
-  3. 둘 다 없으면 → 로컬 출력 후 건너뜀 (런은 항상 계속)
-- Discord로 바꾸려면: Discord 채널 → 설정 → 통합 → 웹훅 → URL 복사 →
-  GitHub **Settings → Secrets → Actions** 에 `DISCORD_WEBHOOK_URL` 등록 (등록 즉시 자동 우선).
+- **채널 자동 선택 (설정된 것만 쓰고, 없으면 다음으로)**:
+  1. `TELEGRAM_BOT_TOKEN` (+ `TELEGRAM_CHAT_ID`) → **텔레그램** (CHAT_ID 없으면 봇의 getUpdates로 자동 추출)
+  2. `DISCORD_WEBHOOK_URL` → Discord
+  3. 둘 다 없으면(Actions 기본) → 저장소 이슈 **`📡 일일 알림`** 에 자동 댓글
+  4. 실행 불가면 → 로컬 출력 후 건너뜀 (런은 항상 계속)
+- **텔레그램 설정 (2분)**: @BotFather → `/newbot` → 토큰 복사 → 그 봇에게 아무 메시지 1개 전송 →
+  GitHub **Settings → Secrets → Actions** 에 `TELEGRAM_BOT_TOKEN` 등록 (CHAT_ID는 첫 전송 시 자동 추출).
 
 ## 빠른 시작
 
@@ -100,7 +101,7 @@ app/
   scoreboard.py     적중률/후보/상세 조회
   ranker.py         종목선택 랭커 (후보 압축)
   sell_timing.py    매도 타이밍 모니터 (익절/손절 가상 추적)
-  notify.py         Discord 웹훅 알림 (스캔·판정·매도 요약)
+  notify.py         알림 전송 (텔레그램 > 디스코드 > GitHub 이슈, 스캔·판정·매도 요약)
   main.py           FastAPI 라우트 (/api/...)
   export.py         정적 JSON (app/static/api/) + site/ 발행
   signals/          전략 플러그인 (base, breakout, ssanggul, bnf_oversold)
