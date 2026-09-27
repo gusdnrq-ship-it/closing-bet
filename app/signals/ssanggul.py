@@ -14,8 +14,9 @@ STRATEGY_META = {
     "caveats": (
         "원 영상은 유료상품(전자책/텔레그램) 유도 목적 콘텐츠로 승률 근거 미검증. "
         "우리로(046970) 2022~2026 실데이터 검증 결과 매수 신호 발생 자체가 극히 희소"
-        "(4.5년간 1건, 손실 -35.41%). 표본 부족으로 통계적 유의성 없음 — 적중률 표본수를 "
-        "함께 확인할 것."
+        "(4.5년간 1건, 손실 -35.41%). 전 유니버스 5년 재생(2,506종목)에서도 신호 206건뿐 "
+        "(연 ~40건) — 개발기간 평균 −1.2%, 검증기간 +1.1%로 표본 부족·유의성 없음. "
+        "적중률 표본수를 함께 확인할 것."
     ),
 }
 
@@ -57,6 +58,13 @@ def _build(df: pd.DataFrame) -> pd.DataFrame:
     if signals:
         df.iloc[signals, df.columns.get_loc("buy_signal")] = True
     return df
+
+
+def conditions(df: pd.DataFrame) -> pd.Series:
+    """전 거래일 매수 신호 시리즈 (백테스트/랭커용) — generate는 마지막 바만 판정."""
+    if len(df) < MIN_ROWS:
+        return pd.Series(False, index=df.index)
+    return _build(df)["buy_signal"].fillna(False).astype(bool)
 
 
 def generate(df: pd.DataFrame) -> dict | None:

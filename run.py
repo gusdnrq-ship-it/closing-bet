@@ -8,6 +8,7 @@
     python run.py scan              # 시그널 스캔 + 정산
     python run.py backtest          # 전 전략 백테스트 (기본 360거래일, --days 0=전체)
     python run.py export            # 정적 대시보드 JSON/site 발행
+    python run.py notify            # Discord 웹훅으로 오늘 결과 알림 (DISCORD_WEBHOOK_URL 필요)
     python run.py status            # 현재 상태 요약
     python run.py serve             # 대시보드 실행 (http://127.0.0.1:8788)
 """
@@ -49,6 +50,7 @@ def main():
     bt.add_argument("--strategy", nargs="*", help="지정 전략만 (기본 전체)")
 
     sub.add_parser("export", help="정적 대시보드 JSON/site 발행")
+    sub.add_parser("notify", help="Discord 웹훅으로 오늘 결과 알림")
     sub.add_parser("status", help="현재 상태 요약")
 
     sv = sub.add_parser("serve", help="대시보드 서버 실행")
@@ -98,6 +100,10 @@ def main():
     elif args.cmd == "export":
         st = export.run(conn)
         print(f"발행 완료: {st['exported']} · site/ ({st['stocks']}종목, 시그널 {st['signals']}건)")
+
+    elif args.cmd == "notify":
+        from app import notify
+        print(notify.run())
 
     elif args.cmd == "status":
         from app import scoreboard

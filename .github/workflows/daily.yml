@@ -60,6 +60,11 @@ jobs:
           python run.py scan
           python run.py export
 
+      - name: Discord 알림
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python run.py notify
+
       - name: WAL 정리
         run: python -c "import sqlite3; c = sqlite3.connect('db/closing_bet.db'); print(c.execute('PRAGMA wal_checkpoint(TRUNCATE)').fetchone()); c.close()"
 
