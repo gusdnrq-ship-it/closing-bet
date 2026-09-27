@@ -74,6 +74,13 @@ tbody tr:hover { background: rgba(255,255,255,.03); }
 .score .caveat { margin-top: 6px; font-size: 11px; color: var(--muted); white-space: normal; line-height: 1.4; }
 
 .empty { color: var(--muted); padding: 8px 2px; }
+.note { color: var(--muted); font-size: 11px; line-height: 1.5; margin-top: 6px; }
+.row-selected { background: rgba(240,180,41,.08); }
+.row-selected td { font-weight: 600; }
+.row-selected td:first-child { color: var(--accent); }
+.sl-pending, .sl-live { color: var(--muted); }
+.sl-tp { color: var(--hit); font-weight: 700; }
+.sl-sl { color: var(--miss); font-weight: 700; }
 .search { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
 .search input {
   background: var(--panel); border: 1px solid var(--line); color: var(--text);

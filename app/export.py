@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 import config
-from app import db, scoreboard
+from app import db, scoreboard, sell_timing
 
 API_DIR = config.BASE_DIR / "app" / "static" / "api"
 
@@ -54,6 +54,7 @@ def export_api(conn=None) -> dict:
 
         _write("status.json", status)
         _write("today.json", scoreboard.today_candidates(conn))
+        _write("sell.json", sell_timing.build(conn))
         _write("results.json", {"items": scoreboard.recent_results(conn, 300)})
         _write("scoreboard.json", scoreboard.scoreboard(conn))
         _write("signals.json", {"items": signals})

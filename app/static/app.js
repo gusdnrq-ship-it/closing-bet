@@ -1,7 +1,7 @@
 ﻿const $ = (s) => document.querySelector(s);
 const fmt = (n) => (n == null ? "-" : Number(n).toLocaleString("ko-KR"));
 const STATUS_KO = { HIT: "적중", MISS: "미달", VOID: "무효", PENDING: "대기" };
-const STRAT_KO = { breakout: "신고가 돌파", ssanggul_bollinger: "쌍굴파기" };
+const STRAT_KO = { breakout: "신고가 돌파", ssanggul_bollinger: "쌍굴파기", bnf_oversold: "BNF 이격도80 역반등" };
 let chart = null;
 
 async function api(path, opts) {
@@ -29,22 +29,53 @@ async function loadStatus() {
 async function loadToday() {
   const d = await staticApi("today");
   $("#todayDate").textContent = d.date ? `${d.date} 종가 기준 → 다음 거래일 종가로 판정` : "";
+  $("#rankNote").textContent = d.rank_note || "";
   if (!d.items.length) {
     $("#today").innerHTML = `<div class="empty">오늘 발생한 시그널이 없습니다. (스캔을 실행했거나 신호 없음)</div>`;
     return;
   }
+  const money = (n) => n == null ? "-" : (n / 1e8).toFixed(1) + "억";
   const rows = d.items.map((s) => `
-    <tr>
+    <tr class="${s.selected ? "row-selected" : ""}">
+      <td>${s.selected ? "★ 선택" : s.rank ? "#" + s.rank : "-"}</td>
       <td><b>${s.name || s.code}</b> <span class="tag">${s.code} · ${s.market || "-"}</span></td>
       <td>${STRAT_KO[s.strategy] || s.strategy}</td>
       <td class="dir-${s.direction}">${s.direction === "UP" ? "상승 ↑" : "하락 ↓"}</td>
       <td>${fmt(s.entry_close)}</td>
-      <td class="reason">${s.reason || "-"}</td>
+      <td>${s.dev ?? "-"} / ${s.rsi ?? "-"} / ${money(s.money5)}</td>
+      <td>${s.score ?? "-"}</td>
       <td class="st-${s.status}">${STATUS_KO[s.status]}</td>
     </tr>`).join("");
   $("#today").className = "card table-wrap";
   $("#today").innerHTML = `<table><thead><tr>
-    <th>종목</th><th>전략</th><th>방향</th><th>진입 종가</th><th>근거</th><th>상태</th>
+    <th>순위</th><th>종목</th><th>전략</th><th>방향</th><th>진입 종가</th>
+    <th>이격도 / RSI / 5일대금</th><th>점수</th><th>상태</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+async function loadSell() {
+  const d = await staticApi("sell");
+  $("#sellCaveat").textContent = d.caveats || "";
+  if (!d.items || !d.items.length) {
+    $("#sell").innerHTML = `<div class="empty">추적 중인 매수 신호가 없습니다.</div>`;
+    return;
+  }
+  const STATE_CLS = { PENDING: "sl-pending", LIVE: "sl-live", TP: "sl-tp", SL: "sl-sl" };
+  const rows = d.items.map((s) => `
+    <tr>
+      <td><b>${s.name || s.code}</b> <span class="tag">${s.code}</span></td>
+      <td>${s.signal_date}</td>
+      <td>${s.entry_date || "미진입"} @ ${fmt(s.entry_price)}</td>
+      <td>${fmt(s.current)}</td>
+      <td class="${s.ret_pct == null ? "" : s.ret_pct >= 0 ? "dir-UP" : "dir-DOWN"}">
+        ${s.ret_pct == null ? "-" : (s.ret_pct > 0 ? "+" : "") + s.ret_pct + "%"}</td>
+      <td>${fmt(s.stop)} <span class="tag">목표 ${fmt(s.target)}</span></td>
+      <td class="${STATE_CLS[s.state]}">${s.state_ko}${s.exit_date ? ` (${s.exit_date})` : ""}</td>
+    </tr>`).join("");
+  $("#sell").className = "card table-wrap";
+  $("#sell").innerHTML = `<table><thead><tr>
+    <th>종목</th><th>신호일</th><th>진입 (T+1 시가)</th><th>현재</th><th>수익률</th>
+    <th>손절선 / 목표</th><th>상태</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -102,7 +133,7 @@ async function runScan() {
     const r = await api("/api/scan", { method: "POST" });
     if (!r.ok) throw new Error(r.error || "스캔 실패");
     btn.textContent = `신규 ${r.new_signals}건 · 판정 ${r.settled.HIT + r.settled.MISS}건`;
-    await Promise.all([loadStatus(), loadToday(), loadScoreboard(), loadResults()]);
+    await Promise.all([loadStatus(), loadToday(), loadSell(), loadScoreboard(), loadResults()]);
     setTimeout(() => { btn.textContent = "스캔 실행"; }, 4000);
   } catch (e) {
     const webOnly = /→ (404|405)$/.test(String(e.message));
@@ -212,5 +243,5 @@ $("#searchBtn").addEventListener("click", searchStock);
 $("#codeInput").addEventListener("keydown", (e) => { if (e.key === "Enter") searchStock(); });
 
 (async function init() {
-  await Promise.all([loadStatus(), loadToday(), loadScoreboard(), loadResults()]);
+  await Promise.all([loadStatus(), loadToday(), loadSell(), loadScoreboard(), loadResults()]);
 })();

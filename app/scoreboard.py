@@ -1,5 +1,5 @@
 """적중률 스코어보드 집계 (표본수 경고 필수 — 정직성 원칙)."""
-from app import db
+from app import db, ranker
 from app.signals import base as strategies
 
 
@@ -73,7 +73,8 @@ def today_candidates(conn) -> dict:
             "status": r["status"], "signal_date": r["signal_date"],
             "settle_date": r["settle_date"], "settle_close": r["settle_close"],
         })
-    return {"date": d, "items": items}
+    items = ranker.rank_items(conn, items)
+    return {"date": d, "items": items, "rank_note": ranker.NOTE}
 
 
 def recent_results(conn, limit: int = 60) -> list[dict]:

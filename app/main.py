@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import db, scoreboard, scanner, universe
+from app import db, scoreboard, scanner, sell_timing, universe
 
 app = FastAPI(title="종가배팅 대시보드")
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -38,6 +38,15 @@ def today():
     conn = db.connect()
     try:
         return scoreboard.today_candidates(conn)
+    finally:
+        conn.close()
+
+
+@app.get("/api/sell")
+def sell():
+    conn = db.connect()
+    try:
+        return sell_timing.build(conn)
     finally:
         conn.close()
 

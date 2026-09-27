@@ -42,6 +42,17 @@ python run.py serve           # 대시보드 http://127.0.0.1:8788
 
 과거 재생 백테스트: `python run.py backtest --days 360` (0=전체 기간, `--strategy`로 지정).
 
+## 종목선택 랭커 · 매도 타이밍
+
+- **종목선택 랭커** (`app/ranker.py`): 당일 후보를 전략 내 백분위 점수로 압축 —
+  BNF 전략은 이격도 40% · RSI 30% · 5일 평균 거래대금 30% 가중, 다른 전략은 거래대금만.
+  상위 5종목 + 5일 평균 대금 1억 이상이면 **★ 선택** 표시. *선택군의 적중률 우위는 미검증 — 참고용.*
+- **매도 타이밍** (`app/sell_timing.py`): 최근 15거래일 매수(UP) 신호를 "다음 날 시가에 샀다"고 가정하고
+  원 영상 매도 규칙으로 추적 — **익절** = 가격이 60일선 회귀(원 영상의 '이격도 0' 해석),
+  **손절** = 신호 이전 60일 최저가 하회('이전 저점', 룩백 가정). 진입 타이밍 백테스트와 별개로
+  **매도 규칙 자체는 미검증**이며 실제 보유가 아닌 가상 추적입니다.
+- 파라미터: `config.py`의 `RANK_*`, `SELL_*`.
+
 ## 구조
 
 ```
@@ -52,9 +63,11 @@ app/
   data.py           OHLCV 수집/백필/증분
   scanner.py        시그널 스캔 + 익일 종가 정산
   scoreboard.py     적중률/후보/상세 조회
+  ranker.py         종목선택 랭커 (후보 압축)
+  sell_timing.py    매도 타이밍 모니터 (익절/손절 가상 추적)
   main.py           FastAPI 라우트 (/api/...)
   export.py         정적 JSON (app/static/api/) + site/ 발행
-  signals/          전략 플러그인 (base, breakout, ssanggul)
+  signals/          전략 플러그인 (base, breakout, ssanggul, bnf_oversold)
   static/           대시보드 (index.html, app.js, style.css)
 scripts/make_seed.py  seed DB(360거래일 축소본) 생성
 .github/workflows/daily.yml  Actions 자동 갱신 + Pages 배포
