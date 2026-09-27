@@ -90,3 +90,14 @@ tbody tr:hover { background: rgba(255,255,255,.03); }
 .disclaimer p { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 0; }
 .loading { color: var(--muted); }
 .error { color: var(--miss); }
+a { color: var(--down); }
+a:hover { text-decoration: underline; }
+.verif-title { font-size: 13px; font-weight: 700; margin: 14px 2px 4px; color: var(--text); }
+.verif-title:first-child { margin-top: 2px; }
+.verif-note { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 0 2px 8px; white-space: normal; }
+.verif-ok { color: var(--hit); font-weight: 700; }
+.verif-bad { color: var(--miss); font-weight: 700; }
+.verif-mid { color: var(--accent); font-weight: 700; }
+#verification table { white-space: normal; }
+#verification td { vertical-align: top; }
+.tl-top { white-space: normal; line-height: 1.7; }

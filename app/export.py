@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 import config
-from app import db, scoreboard, sell_timing
+from app import db, scoreboard, sell_timing, timeline, verification
 
 API_DIR = config.BASE_DIR / "app" / "static" / "api"
 
@@ -52,12 +52,21 @@ def export_api(conn=None) -> dict:
         for s in signals:
             s["name"], s["market"] = names.get(s["code"], (None, None))
 
+        today = scoreboard.today_candidates(conn)
+        verif = verification.build()
+        verif["generated"] = status["exported"]
+
         _write("status.json", status)
-        _write("today.json", scoreboard.today_candidates(conn))
+        _write("today.json", today)
+        _write("verification.json", verif)
         _write("sell.json", sell_timing.build(conn))
         _write("results.json", {"items": scoreboard.recent_results(conn, 300)})
         _write("scoreboard.json", scoreboard.scoreboard(conn))
         _write("signals.json", {"items": signals})
+        try:
+            timeline.record(today, exported=status["exported"])
+        except Exception:
+            pass  # 기록 실패는 발행을 중단시키지 않는다
         _write("stocks.json", {
             "items": [
                 {"code": r["code"], "name": r["name"], "market": r["market"]}

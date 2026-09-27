@@ -101,6 +101,8 @@ app/
   scoreboard.py     적중률/후보/상세 조회
   ranker.py         종목선택 랭커 (후보 압축)
   sell_timing.py    매도 타이밍 모니터 (익절/손절 가상 추적)
+  verification.py   검증근거 데이터 (백테스트·교차검증 → verification.json)
+  timeline.py       예측 기록 타임라인 (★선택 timestamp 보존 → timeline.json)
   notify.py         알림 전송 (텔레그램 > 디스코드 > GitHub 이슈, 스캔·판정·매도 요약)
   main.py           FastAPI 라우트 (/api/...)
   export.py         정적 JSON (app/static/api/) + site/ 발행

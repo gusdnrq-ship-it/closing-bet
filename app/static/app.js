@@ -104,6 +104,66 @@ async function loadScoreboard() {
   $("#scoreboard").innerHTML = cards.join("");
 }
 
+function verdictClass(text) {
+  const t = String(text).replace(/<[^>]*>/g, "");
+  if (t.length > 24) return "";
+  if (/채택|유효/.test(t)) return "verdict-ok";
+  if (/폐기|실패|무가치|비활성화/.test(t)) return "verdict-bad";
+  if (/불가|경고|과적합|없음|미흡/.test(t)) return "verdict-mid";
+  return "";
+}
+
+async function loadVerification() {
+  try {
+    const d = await staticApi("verification");
+    const blocks = d.sections.map((sec) => {
+      const head = `<tr>${sec.columns.map((c) => `<th>${c}</th>`).join("")}</tr>`;
+      const rows = sec.rows.map((r) =>
+        `<tr>${r.map((c, i) =>
+          `<td${i > 0 ? ` class="${verdictClass(c)}"` : ""}>${c}</td>`).join("")}</tr>`
+      ).join("");
+      return `<div class="verif-title">${sec.title}</div>
+        <div class="verif-note">${sec.note}</div>
+        <table><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+    }).join("");
+    $("#verification").className = "card table-wrap";
+    $("#verification").innerHTML = blocks;
+    $("#verifCaveats").textContent = d.caveats.length ? `⚠ ${d.caveats.join(" · ")}` : "";
+  } catch (e) {
+    $("#verification").innerHTML = `<div class="empty">검증 데이터 없음 (export 미실행)</div>`;
+  }
+}
+
+async function loadTimeline() {
+  try {
+    const d = await staticApi("timeline");
+    const es = d.entries || [];
+    if (!es.length) {
+      $("#timeline").innerHTML = `<div class="empty">기록 없음 — export 실행 시 자동 기록됩니다.</div>`;
+      return;
+    }
+    const rows = es.map((t) => {
+      const picks = (t.top5 || []).map((p) =>
+        `<b>${p.name || p.code}</b><span class="tag">${p.code}${p.dist_high != null ? " · +" + p.dist_high + "%" : ""}</span>`
+      ).join("<br>") || `<span class="tag">선택 없음</span>`;
+      const audit = t.run_url
+        ? `<a href="${t.run_url}" target="_blank" rel="noopener">Actions 런 #${String(t.run_id).slice(-6)} ↗</a>`
+        : `<span class="tag">로컬 기록${t.exported ? " · " + t.exported : ""}</span>`;
+      return `<tr>
+        <td><b>${t.date || "-"}</b></td>
+        <td>${t.signals}건</td>
+        <td class="tl-top">${picks}</td>
+        <td>${audit}</td>
+      </tr>`;
+    }).join("");
+    $("#timeline").innerHTML = `<table><thead><tr>
+      <th>예측일</th><th>시그널</th><th>★ 선택 (당시 기록)</th><th>감사 경로</th>
+      </tr></thead><tbody>${rows}</tbody></table>`;
+  } catch (e) {
+    $("#timeline").innerHTML = `<div class="empty">기록 없음 (export 미실행)</div>`;
+  }
+}
+
 async function loadResults() {
   const d = await staticApi("results");
   const tb = $("#results tbody");
@@ -133,7 +193,7 @@ async function runScan() {
     const r = await api("/api/scan", { method: "POST" });
     if (!r.ok) throw new Error(r.error || "스캔 실패");
     btn.textContent = `신규 ${r.new_signals}건 · 판정 ${r.settled.HIT + r.settled.MISS}건`;
-    await Promise.all([loadStatus(), loadToday(), loadSell(), loadScoreboard(), loadResults()]);
+    await Promise.all([loadStatus(), loadToday(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults()]);
     setTimeout(() => { btn.textContent = "스캔 실행"; }, 4000);
   } catch (e) {
     const webOnly = /→ (404|405)$/.test(String(e.message));
@@ -243,5 +303,5 @@ $("#searchBtn").addEventListener("click", searchStock);
 $("#codeInput").addEventListener("keydown", (e) => { if (e.key === "Enter") searchStock(); });
 
 (async function init() {
-  await Promise.all([loadStatus(), loadToday(), loadSell(), loadScoreboard(), loadResults()]);
+  await Promise.all([loadStatus(), loadToday(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults()]);
 })();
