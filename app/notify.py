@@ -1,6 +1,10 @@
-"""Discord 웹훅 알림 — 매일 런 후 오늘의 스캔·판정·매도 결과를 전송.
+"""알림 전송 — 매일 런 후 오늘의 스캔·판정·매도 결과를 보낸다.
 
-DISCORD_WEBHOOK_URL 미설정 시 건너뜀(종료코드 0), 전송 실패도 워크플로우를 중단시키지 않는다.
+채널 우선순위:
+    1. DISCORD_WEBHOOK_URL 설정 시 → Discord 웹훅
+    2. 아니면 Actions 환경(GITHUB_TOKEN + GITHUB_REPOSITORY)이면 → GitHub 이슈에 댓글 자동 추가
+       (이슈 하나("📡 일일 알림")에 날짜순으로 쌓임 — 추가 설정 불필요)
+    3. 둘 다 없으면 → 메시지를 로컬에 출력하고 건너뜀 (종료코드 0, 런 중단 없음)
 실행: python run.py notify   (export 직후 — app/static/api/*.json 읽음)
 """
 import json
@@ -11,6 +15,7 @@ import config
 
 API_DIR = config.BASE_DIR / "app" / "static" / "api"
 PAGES_URL = "https://gusdnrq-ship-it.github.io/closing-bet/"
+ISSUE_TITLE = "📡 일일 알림"
 
 STRAT_KO = {"breakout": "신고가 돌파", "ssanggul_bollinger": "쌍굴파기", "bnf_oversold": "BNF 역반등"}
 STATE_KO = {"PENDING": "진입대기", "LIVE": "보유", "TP": "익절", "SL": "손절"}
@@ -89,19 +94,64 @@ def compose() -> str:
     return "\n".join(lines)
 
 
-def run() -> str:
-    url = (os.environ.get("DISCORD_WEBHOOK_URL") or "").strip()
-    if not url:
-        return "DISCORD_WEBHOOK_URL 미설정 — 알림 건너뜀"
-    msg = compose()
-    payload = json.dumps({"content": msg[:2000], "username": "종가배팅"}).encode("utf-8")
+def _post(url: str, payload: dict, headers: dict, timeout: int = 15) -> tuple[int, dict]:
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(
-        url, data=payload,
-        headers={"Content-Type": "application/json", "User-Agent": "closing-bet-notify"},
+        url, data=data,
+        headers={**headers, "Content-Type": "application/json; charset=utf-8"},
+        method="POST",
     )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        body = resp.read().decode("utf-8")
+        return resp.status, (json.loads(body) if body else {})
+
+
+def _send_discord(url: str, msg: str) -> str:
+    status, _ = _post(
+        url, {"content": msg[:2000], "username": "종가배팅"},
+        {"User-Agent": "closing-bet-notify"},
+    )
+    return f"Discord 전송 완료 (HTTP {status})"
+
+
+def _send_github(msg: str) -> str:
+    tok = (os.environ.get("GITHUB_TOKEN") or "").strip()
+    repo = (os.environ.get("GITHUB_REPOSITORY") or "").strip()
+    if not tok or not repo:
+        return ""
+    api = f"https://api.github.com/repos/{repo}"
+    hdr = {
+        "Authorization": f"Bearer {tok}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "closing-bet-notify",
+    }
+    req = urllib.request.Request(f"{api}/issues?state=open&per_page=100", headers=hdr)
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        issues = json.loads(resp.read().decode("utf-8"))
+    issue = next((i for i in issues if i.get("title") == ISSUE_TITLE), None)
+    if issue is None:
+        _, issue = _post(api + "/issues", {
+            "title": ISSUE_TITLE,
+            "body": "매일 런 직후 스캔·판정·매도 요약이 댓글로 자동 추가됩니다 (자동 생성).",
+        }, hdr)
+    num = issue["number"]
+    _post(f"{api}/issues/{num}/comments", {"body": msg}, hdr)
+    return f"GitHub 이슈 #{num} 댓글 전송 완료"
+
+
+def run() -> str:
+    msg = compose()
+    url = (os.environ.get("DISCORD_WEBHOOK_URL") or "").strip()
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return f"알림 전송 완료 (HTTP {resp.status})"
+        if url:
+            return _send_discord(url, msg)
+        gh = _send_github(msg)
+        if gh:
+            return gh
+        print("── 전송하지 않은 메시지 (채널 미설정) ──")
+        print(msg)
+        return "알림 채널 미설정 (Discord/GitHub 둘 다 없음) — 건너뜀"
     except Exception as e:
         print("── 전송 실패한 메시지 ──")
         print(msg)

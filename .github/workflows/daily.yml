@@ -8,6 +8,7 @@ on:
 permissions:
   contents: read
   actions: read
+  issues: write
   pages: write
   id-token: write
 
@@ -60,9 +61,10 @@ jobs:
           python run.py scan
           python run.py export
 
-      - name: Discord 알림
+      - name: 알림 전송 (Discord → 없으면 GitHub 이슈)
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: python run.py notify
 
       - name: WAL 정리

@@ -18,15 +18,17 @@
 - 수동 실행: GitHub Actions 탭 → `daily-update` → **Run workflow**
 - 웹 버전은 **조회 전용** (스캔·차트 API는 로컬 `serve` 전용, 웹에서는 정적 JSON으로 시그널 이력·후보 제공)
 
-## 알림 (Discord 웹훅)
+## 알림 (Discord 웹훅 · GitHub 이슈 자동 대체)
 
-매일 런 직후 오늘의 스캔 결과를 Discord로 전송한다 (`app/notify.py` → `python run.py notify`).
+매일 런 직후 오늘의 스캔 결과를 보낸다 (`app/notify.py` → `python run.py notify`).
 
 - 알림 내용: 시그널 수(전략별 분포) · ★ 선택 목록(신고가 돌파폭) · 최근 판정 배치 적중률 · 매도 추적 상태(TP/SL/보유) · 오늘 청산 건 · 대시보드 링크
-- 설정: Discord 채널 → 설정 → 통합 → **웹훅** → 새 웹훅 → URL 복사 →
-  GitHub 저장소 **Settings → Secrets and variables → Actions → New secret** 에
-  이름 `DISCORD_WEBHOOK_URL`, 값 = 웹훅 URL 등록
-- 미설정이거나 전송 실패해도 워크플로우는 중단되지 않는다 (조용히 건너뜀 / 로컬에 메시지 출력).
+- **채널 자동 선택 (추가 설정 불필요)**:
+  1. `DISCORD_WEBHOOK_URL` 시크릿이 있으면 → Discord로 전송
+  2. 없으면(Actions 기본) → 저장소 이슈 **`📡 일일 알림`** 에 자동 댓글 (날짜순으로 쌓임, GitHub 알림으로 수신)
+  3. 둘 다 없으면 → 로컬 출력 후 건너뜀 (런은 항상 계속)
+- Discord로 바꾸려면: Discord 채널 → 설정 → 통합 → 웹훅 → URL 복사 →
+  GitHub **Settings → Secrets → Actions** 에 `DISCORD_WEBHOOK_URL` 등록 (등록 즉시 자동 우선).
 
 ## 빠른 시작
 
