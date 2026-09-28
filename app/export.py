@@ -29,7 +29,8 @@ def export_api(conn=None) -> dict:
         status = {
             "stocks": conn.execute("SELECT COUNT(*) c FROM stocks").fetchone()["c"],
             "ohlcv_rows": conn.execute("SELECT COUNT(*) c FROM ohlcv").fetchone()["c"],
-            "last_trade_date": conn.execute("SELECT MAX(date) d FROM ohlcv").fetchone()["d"],
+            "last_trade_date": db.get_meta(conn, "last_trade_date")
+            or conn.execute("SELECT MAX(date) FROM ohlcv").fetchone()[0],
             "signals": conn.execute("SELECT COUNT(*) c FROM signals").fetchone()["c"],
             "universe_updated": db.get_meta(conn, "universe_updated"),
             "backfill_updated": db.get_meta(conn, "backfill_updated"),
