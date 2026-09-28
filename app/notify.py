@@ -101,7 +101,9 @@ def compose() -> str:
                     f"{i['ret_pct']:+.2f}% · {i['exit_date']}"
                 )
 
-    lines.append(f"🔗 {PAGES_URL}")
+    lines.append("**판단 방법**: 신호 다음 거래일 종가가 진입가 ↑ → 적중 / ↓ → 미달 (T+1 종가 1회 판정)")
+    lines.append("★ 기준 = 신고가 돌파폭 상위 5 + 5일 평균 대금 10억↑ · 매도 TP=60일선 회귀 / SL=신고 이전 60일 최저")
+    lines.append(f"🔗 {PAGES_URL} (스코어보드·검증 근거·예측 기록)")
     return "\n".join(lines)
 
 
