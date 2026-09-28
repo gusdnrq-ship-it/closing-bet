@@ -27,6 +27,26 @@
   </section>
 
   <section>
+    <h2>상태 판단 가이드 <span class="tag">해석 안내 (매매 추천 아님) · 백테스트 규칙 기준</span></h2>
+    <div class="card table-wrap"><table>
+      <thead><tr><th>상태</th><th>의미</th><th>규칙상 판단</th></tr></thead>
+      <tbody>
+        <tr><td class="sl-pending"><b>대기</b></td><td>신호 발생 ~ 판정 전 (결과 미확정)</td>
+            <td><b>진입 금지가 아님.</b> 진입 창 = 신호 다음 거래일 장 시작 시가 → 그날 종가에 판정 (1일)</td></tr>
+        <tr><td class="st-HIT">적중</td><td>판정일 종가 &gt; 진입가 (↑)</td><td>참여 완료 — 기록용. 이후 재진입은 규칙 밖</td></tr>
+        <tr><td class="st-MISS">미달</td><td>판정일 종가 &lt; 진입가 (↓)</td><td>참여 완료 — 기록용</td></tr>
+        <tr><td class="st-VOID">무효</td><td>데이터 문제</td><td>성적에서 제외</td></tr>
+        <tr><td class="sl-tp">TP (익절)</td><td>가격이 60일 이동평균선 회귀</td><td>청산 — <b>단, breakout은 97.6%가 즉시 발동(≈T+1 매도)</b></td></tr>
+        <tr><td class="sl-sl">SL (손절)</td><td>신호 이전 60일 최저가 하회</td>
+            <td>청산 — <b>단, 백테스트서 72%가 진입가보다 손절선이 낮아 즉시 출구 = SL 검증 실패 (caveat)</b></td></tr>
+        <tr><td class="sl-live">보유</td><td>TP·SL 미도달</td><td>보유 유지 (가상 추적 — 실매매 아님)</td></tr>
+      </tbody>
+    </table></div>
+    <div class="note">판단 순서: ① 오늘의 후보에서 신호 확인 → ② <b>신호 다음 거래일이 오늘?</b> → 장중이면 시가 진입 창 /
+      판정이 이미 끝났으면(대기 해제) 그 진입은 규칙 밖 → ③ 그날 종가에 적중·미달 확정. 표본·기간별 검증 결과는 '검증 근거' 섹션 참조.</div>
+  </section>
+
+  <section>
     <h2>매도 타이밍 <span class="tag">최근 15거래일 매수 신호 · 가상 보유 추적</span></h2>
     <div id="sell" class="card">로딩…</div>
     <div id="sellCaveat" class="note"></div>
