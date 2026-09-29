@@ -24,7 +24,7 @@ DATA_THROUGH = "2026-09-28"   # 실험에 사용한 최신 확정 종가
 BASELINE = {
     "n": 2_766_478, "hit_rate": 46.89, "void_rate": 5.99,
     "c2c": 0.013, "o2c": -0.080,
-    "note": "전 종목·전 거래일 무작위 베팅 (다음 날 오르면 적중). VOID(동일가) 5.99% 제외.",
+    "note": "전 종목·전 거래일 무작위 베팅 (다음 날 오르면 맞은 것). VOID(동일가) 5.99% 제외.",
 }
 
 # 조건 실험 원자료 — 표와 막대차트를 같은 숫자에서 뽑아내므로 표·차트가 절대 어긋나지 않는다.
@@ -64,7 +64,7 @@ def _cond_block() -> dict:
             for lab, n, hit, ret, dev, contra in _CONDITIONS]
     return {
         "title": "무작위 46.89%를 이기는 조건 (5년 재실행 · VOID 제외)",
-        "columns": ["조건", "n", "적중%", "기준선 대비", "T→T+1", "개발 / 검증 적중", "판정"],
+        "columns": ["조건", "n", "맞은 비율", "기준선 대비", "T→T+1", "개발 / 검증", "판정"],
         "rows": rows,
         "baseline": base,
         # 막대차트: 적중률 − 기준선 (p) — 양수=기준선 이김, 음수=기준선 짐
@@ -83,8 +83,8 @@ def _sell_block() -> dict:
              f"{d:+.2f}p" if d >= 0 else f"−{abs(d):.2f}p"]
             for lab, n, tp, sl, rule, hold, d in _SELL]
     return {
-        "title": "매도 규칙 5년 재검증 (진입=T+1 시가 · TP=60일선 회귀 · SL=이전 60일 최저)",
-        "columns": ["전략·기간", "신호", "TP", "SL", "규칙 전체", "T+20 보유", "규칙−T+20"],
+        "title": "매도 규칙 5년 재검증 (진입=T+1 시가 · 목표=60일선 도달 · 손절=이전 60일 최저 하회)",
+        "columns": ["전략·기간", "신호", "목표", "손절", "규칙 전체", "그냥 20일", "차이"],
         "rows": rows,
         # 대조 차트: 규칙 전체 vs 그냥 20거래일 보유 (%)
         "bars": [{"label": lab, "n": n, "rule": rule, "hold": hold, "delta": delta}
@@ -143,7 +143,7 @@ def _risk_tag(row: dict, past: dict | None) -> dict:
     elif len(why) == 1:
         label, cls = "주의", "mid"
     else:
-        label, cls = "관찰", "ok"
+        label, cls = "양호", "ok"
     return {"label": label, "cls": cls, "why": why}
 
 
@@ -191,7 +191,7 @@ def _plain_notes(row: dict, past: dict | None) -> list[str]:
             out.append(f"이 종목의 과거 동일 신호 {n}건뿐 — 표본 부족, 통계 유의성 없음")
         elif past.get("avg") is not None and past["avg"] < 0:
             out.append(f"과거 동일 신호 {n}건에서 다음 날 평균 {past['avg']:+.1f}% "
-                       f"(적중 {past['hit']:.0f}%) — 이 종목에서는 오히려 손실")
+                       f"(맞은 비율 {past['hit']:.0f}%) — 이 종목에서는 오히려 손실")
     return out
 
 

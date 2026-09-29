@@ -1,6 +1,6 @@
-﻿const $ = (s) => document.querySelector(s);
+const $ = (s) => document.querySelector(s);
 const fmt = (n) => (n == null ? "-" : Number(n).toLocaleString("ko-KR"));
-const STATUS_KO = { HIT: "적중", MISS: "미달", VOID: "무효", PENDING: "대기" };
+const STATUS_KO = { HIT: "맞음", MISS: "틀림", VOID: "제외", PENDING: "대기" };
 const STRAT_KO = { breakout: "신고가 돌파", ssanggul_bollinger: "쌍굴파기", bnf_oversold: "BNF 이격도80 역반등" };
 let chart = null;
 
@@ -34,23 +34,20 @@ async function loadToday() {
     $("#today").innerHTML = `<div class="empty">오늘 발생한 시그널이 없습니다. (스캔을 실행했거나 신호 없음)</div>`;
     return;
   }
-  const money = (n) => n == null ? "-" : (n / 1e8).toFixed(1) + "억";
-  const rows = d.items.map((s) => `
+    const rows = d.items.map((s) => `
     <tr class="${s.selected ? "row-selected" : ""}" data-code="${s.code}">
-      <td>${s.selected ? "★ 선택" : s.rank ? "#" + s.rank : "-"}</td>
-      <td><b>${s.name || s.code}</b> <span class="tag">${s.code} · ${s.market || "-"}</span>
+      <td><b>${s.name || s.code}</b>
+        <span class="tag">${s.selected ? "★ 선택" : s.rank ? "#" + s.rank : ""} · ${STRAT_KO[s.strategy] || s.strategy}</span>
         <a class="to-report" href="#star-${s.code}">해석 ↓</a></td>
-      <td>${STRAT_KO[s.strategy] || s.strategy}</td>
-      <td class="dir-${s.direction}">${s.direction === "UP" ? "상승 ↑" : "하락 ↓"}</td>
+      <td class="dir-${s.direction}">${s.direction === "UP" ? "오름 ↑" : "내림 ↓"}</td>
       <td>${fmt(s.entry_close)}</td>
-      <td>${s.dev ?? "-"} / ${s.rsi ?? "-"} / ${money(s.money5)} / ${s.dist_high ?? "-"}%</td>
-      <td>${s.score ?? "-"}</td>
+      <td title="이격도 = 60일 평균 대비 · RSI = 오른 힘 (70↑ 과열 / 30↓ 과매도)"
+          style="cursor:help">${s.dev ?? "-"} / ${s.rsi ?? "-"}</td>
       <td class="st-${s.status}">${STATUS_KO[s.status]}</td>
     </tr>`).join("");
   $("#today").className = "card table-wrap";
   $("#today").innerHTML = `<table><thead><tr>
-    <th>순위</th><th>종목</th><th>전략</th><th>방향</th><th>진입 종가</th>
-    <th>이격도 / RSI / 5일대금 / 신고가대비</th><th>점수</th><th>상태</th>
+    <th>종목 / 전략</th><th>방향</th><th>진입 종가</th><th>이격도 / RSI</th><th>결과</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
   syncReportLinks();
 }
@@ -63,31 +60,29 @@ async function loadSell() {
     return;
   }
   const STATE_CLS = { PENDING: "sl-pending", LIVE: "sl-live", TP: "sl-tp", SL: "sl-sl" };
-  const STATE_KO = {
-    PENDING: "진입 대기", LIVE: "보유 중",
-    TP: "목표 도달 (60일선 회귀)", SL: "손절선 도달 (60일 최저)",
+  const STATE_KO = { PENDING: "대기", LIVE: "보유", TP: "목표 도달", SL: "손절 도달" };
+  const STATE_TIP = {
+    PENDING: "신호는 났지만 아직 진입 전",
+    LIVE: "진입 후 — 목표·손절 어느 쪽에도 닿지 않음",
+    TP: "가격이 60일 이동평균선에 도달해 매도됨 (수익 보장 아님 — 진입가가 60일선보다 낮으면 손실)",
+    SL: "신호 이전 60거래일 최저가 아래로 떨어져 매도됨 (진입가보다 손절선이 위면 수익률 0%로 즉시 체결)",
   };
   const rows = d.items.map((s) => `
     <tr>
-      <td><b>${s.name || s.code}</b> <span class="tag">${s.code}</span></td>
-      <td>${s.signal_date}</td>
-      <td>${s.entry_date || "미진입"} @ ${fmt(s.entry_price)}</td>
+      <td><b>${s.name || s.code}</b> <span class="tag">${s.signal_date}</span></td>
+      <td>${s.entry_date ? "@" + fmt(s.entry_price) : "미진입"}</td>
       <td>${fmt(s.current)}</td>
       <td class="${s.ret_pct == null ? "" : s.ret_pct >= 0 ? "dir-UP" : "dir-DOWN"}"
-          title="진입가 대비 변동률. 목표·손절에 도달했으면 체결가 기준">
+          title="진입가 대비 변동률">
         ${s.ret_pct == null ? "-" : (s.ret_pct > 0 ? "+" : "") + s.ret_pct + "%"}</td>
-      <td><span title="손절선 = 신호 이전 60거래일 최저가 (그 아래로 떨어지면 매도)">${fmt(s.stop)}</span>
-        <span class="tag" title="목표 = 60일 이동평균선 (그곳까지 오르면 매도). 단, 진입가보다 낮을 수 있음">목표 ${fmt(s.target)}</span></td>
-      <td class="${STATE_CLS[s.state]}" title="${STATE_KO[s.state] || s.state_ko}">${STATE_KO[s.state] || s.state_ko}${s.exit_date ? ` (${s.exit_date})` : ""}</td>
+      <td class="${STATE_CLS[s.state]}" title="${STATE_TIP[s.state] || ""}">${STATE_KO[s.state] || s.state_ko}</td>
     </tr>`).join("");
   $("#sell").className = "card table-wrap";
   $("#sell").innerHTML = `<table><thead><tr>
-    <th>종목</th><th>신호일</th><th>진입 (T+1 시가)</th><th>현재</th><th title="진입가 대비 변동률">수익률</th>
-    <th title="왼쪽=손절선(신호 이전 60일 최저) · 오른쪽=목표(60일 이동평균)">손절선 / 목표</th><th>상태</th>
+    <th>종목</th><th>진입가</th><th>현재</th><th>수익률</th><th>결과</th>
     </tr></thead><tbody>${rows}</tbody></table>
-    <div class="note">⚠ <b>"목표 도달"이 곧 수익은 아님</b> — 목표가(60일선)가 진입가보다 낮으면 손실로 체결된다.
-    <b>"손절선 도달"에 수익률 0%</b>인 건 손절선이 진입가보다 위에서 열렸기 때문(첫날 즉시 체결).
-    이 표는 "규칙대로 팔았다면 이렇다"는 <b>가상 시뮬레이션</b>이며 실제 보유가 아니다.</div>`;
+    <div class="note">가상 시뮬레이션 (실제 보유 아님) · 진입=신호 다음 거래일 시가.
+    마우스를 <b>결과</b> 칸에 올리면 풀이가 뜬다.</div>`;
 }
 
 async function loadScoreboard() {
@@ -98,7 +93,7 @@ async function loadScoreboard() {
     <div class="score">
       <div class="name">전체</div>
       <div class="rate ${o.hit_rate == null ? "none" : ""}">${o.hit_rate == null ? "판정 데이터 없음" : o.hit_rate + "%"}</div>
-      <div class="detail">적중 ${o.hits} · 미달 ${o.misses} · 대기 ${o.pending} · 무효 ${o.voids}</div>
+      <div class="detail">맞음 ${o.hits} · 틀림 ${o.misses} · 대기 ${o.pending} · 제외 ${o.voids}</div>
       ${o.warning ? `<div class="warn">${o.warning}</div>` : ""}
     </div>`);
   for (const [key, v] of Object.entries(s.strategies)) {
@@ -106,7 +101,7 @@ async function loadScoreboard() {
       <div class="score">
         <div class="name">${v.display_name}</div>
         <div class="rate ${v.hit_rate == null ? "none" : ""}">${v.hit_rate == null ? "판정 데이터 없음" : v.hit_rate + "%"}</div>
-        <div class="detail">적중 ${v.hits} · 미달 ${v.misses} · 대기 ${v.pending} · 판정 ${v.settled}건</div>
+        <div class="detail">맞음 ${v.hits} · 틀림 ${v.misses} · 대기 ${v.pending} · 판정 ${v.settled}건</div>
         ${v.warning ? `<div class="warn">${v.warning}</div>` : ""}
         ${v.caveats ? `<div class="caveat">⚠ ${v.caveats}</div>` : ""}
       </div>`);
@@ -257,39 +252,43 @@ function renderStars(stars) {
     `오늘 후보 <b>${stars.items.length}종목</b> · ★ 선택 ${sel}종목 · ` +
     `<span class="verif-bad">위험 ${rc.bad || 0}</span> / ` +
     `<span class="verif-mid">주의 ${rc.mid || 0}</span> / ` +
-    `<span class="verif-ok">관찰 ${rc.ok || 0}</span> — "위험"은 위험 조건이 2개 이상 겹친 종목입니다.`;
+    `<span class="verif-ok">양호 ${rc.ok || 0}</span>`;
 
   box.innerHTML = `<div class="star-grid">${stars.items.map((s) => {
     const lv = s.levels || {};
     const risk = s.risk || { label: "-", cls: "ok", why: [] };
     const p = s.past;
     const past = p
-      ? `과거 동일 신호 ${p.n}건 · 적중 ${p.hit.toFixed(0)}% · 평균 ${p.avg == null ? "-" : (p.avg > 0 ? "+" : "") + p.avg.toFixed(1) + "%"}`
+      ? `과거 동일 신호 ${p.n}건 · 맞은 비율 ${p.hit.toFixed(0)}% · 평균 ${p.avg == null ? "-" : (p.avg > 0 ? "+" : "") + p.avg.toFixed(1) + "%"}`
       : "과거 동일 신호 없음";
     const big = (s.big_moves || []).map((m) =>
       `<span class="chip ${m.ret >= 0 ? "dir-UP" : "dir-DOWN"}">${m.date.slice(5)} ${m.ret > 0 ? "+" : ""}${m.ret}%</span>`).join("");
     return `<div class="star-card ${s.selected ? "is-sel" : ""}" id="star-${s.code}">
       <div class="hd">${s.name || s.code} <span class="tag">${s.code}${s.selected ? " · ★ 선택" : ""}</span>
-        <span class="risk r-${risk.cls}" title="위험 조건이 2개 이상이면 위험, 1개면 주의, 0개면 관찰">${risk.label}</span></div>
+        <span class="risk r-${risk.cls}" title="위험 조건 2개 이상 = 위험, 1개 = 주의, 0개 = 양호">${risk.label}</span></div>
       <div class="verdict v-${risk.cls}">${verdictLine(s, risk)}</div>
       <div class="px">${fmt(s.close)}<span class="chg ${s.ret1 >= 0 ? "dir-UP" : "dir-DOWN"}">${s.ret1 == null ? "" : (s.ret1 > 0 ? "+" : "") + s.ret1 + "%"}</span></div>
       ${sparkSVG(s)}
-      <div class="spark-lg">60일 종가(주황) · 60일선(파랑 점선) · 60일 고가/저가(가로 점선)</div>
+      <div class="spark-lg">주황=종가 · 점선=60일선 · 가로선=60일 고가·저가</div>
       <div class="m">
-        <span title="현재가를 60일 평균으로 나눈 값. 100=평균과 같음, 156=평균보다 56% 비쌈(과열)">이격도 ${s.dev ?? "-"}</span> ·
-        <span title="최근 오른 힘의 비율. 70↑=과열(오를 힘 소진) · 30↓=과매도(팔 만큼 팔림)">RSI ${s.rsi ?? "-"}</span> ·
-        <span title="1년 최저~최고 사이 중 현재 위치. 0%=1년 최저, 100%=1년 최고">52주 위치 ${s.pos52 ?? "-"}%</span> ·
-        <span title="60거래일 전 대비 등락률">60일 ${s.ret60 == null ? "-" : (s.ret60 > 0 ? "+" : "") + s.ret60 + "%"}<br></span><br>
-        <span title="5·20·60일 이동평균. 정배열=단기>중기>장기(상승 추세), 역배열=반대(하락 추세)">MA5 ${fmt(s.ma5)} / MA20 ${fmt(s.ma20)} / MA60 ${fmt(s.ma60)} (${s.array})</span> ·
-        <span title="볼린저밴드 상단 위치. 100↑=밴드 위로 돌파, 0↓=밴드 아래로 이탈">BB %B ${s.bb_pctb ?? "-"}</span><br>
-        <span title="당일 거래량 ÷ 최근 20일 평균 거래량. 10배↑=하루 몰림(지속성 확인 필요)">거래량 20일평균 대비 ${s.vol_ratio ?? "-"}배</span> ·
-        <span title="60일 동안 최고점에서 최대로 떨어진 폭. 클수록 변동성이 큼">60일 최대낙폭 ${s.mdd60 ?? "-"}%</span> ·
-        <span title="60거래일 최고가 / 최저가">60일 고가 ${fmt(lv.hi60)} / 저가 ${fmt(lv.lo60)}<br></span><br>
-        <span title="60일 고가~저가 구간에서의 지지·저항선 (피보나치 되돌림). 현재가가 아래 있으면 그 값이 저항">되돌림 0.382 ${fmt(lv.r382)} / 0.5 ${fmt(lv.r500)} / 0.618 ${fmt(lv.r618)}</span><br>${past}</div>
-      ${big ? `<div class="chips">큰 변동: ${big}</div>` : ""}
+        <span title="현재가를 60일 평균으로 나눈 값. 100=평균과 같음, 156=평균보다 56% 비쌈(과열)">이격도 <b>${s.dev ?? "-"}</b></span> ·
+        <span title="최근 오른 힘의 비율. 70↑=과열 · 30↓=과매도">RSI <b>${s.rsi ?? "-"}</b></span> ·
+        <span title="당일 거래량 ÷ 최근 20일 평균. 10배↑=하루 몰림">거래량 <b>${s.vol_ratio ?? "-"}배</b></span>
+      </div>
       <div class="why">선택 이유: ${s.reason || "-"}</div>
-      ${(s.notes || []).length ? `<ul>${s.notes.map((n) => `<li>${n}</li>`).join("")}</ul>` : ""}
       ${risk.why.length ? `<div class="risk-why">위험 신호: ${risk.why.join(" · ")}</div>` : ""}
+      <details class="fold slim">
+        <summary>자세한 지표</summary>
+        <div class="m">
+          52주 위치 ${s.pos52 ?? "-"}% · 60일 ${s.ret60 == null ? "-" : (s.ret60 > 0 ? "+" : "") + s.ret60 + "%"} ·
+          최대낙폭 ${s.mdd60 ?? "-"}%<br>
+          MA5 ${fmt(s.ma5)} / MA20 ${fmt(s.ma20)} / MA60 ${fmt(s.ma60)} (${s.array}) · BB %B ${s.bb_pctb ?? "-"}<br>
+          60일 고가 ${fmt(lv.hi60)} / 저가 ${fmt(lv.lo60)} ·
+          되돌림 0.382 ${fmt(lv.r382)} / 0.5 ${fmt(lv.r500)} / 0.618 ${fmt(lv.r618)}<br>${past}
+        </div>
+        ${big ? `<div class="chips">큰 변동: ${big}</div>` : ""}
+        ${(s.notes || []).length ? `<ul>${s.notes.map((n) => `<li>${n}</li>`).join("")}</ul>` : ""}
+      </details>
     </div>`;
   }).join("")}</div>`;
 
@@ -312,7 +311,7 @@ function verdictLine(s, risk) {
     else if (rsi <= 30) bits.push(`RSI ${s.rsi} 과매도(팔 만큼 팔림)`);
   }
   if (s.past && s.past.n < 10) bits.push(`과거 신호 ${s.past.n}건뿐 — 표본 부족`);
-  if (!bits.length) return "지표상 특이점 없음 — 관찰 상태";
+  if (!bits.length) return "지표에 특이점 없음";
   const head = risk.cls === "bad" ? "위험:" : risk.cls === "mid" ? "주의:" : "";
   return (head ? `<b>${head}</b>` : "") + bits.slice(0, 3).join(" · ");
 }
@@ -335,7 +334,7 @@ function renderCondBars(cond, baseline) {
     const w = (Math.abs(x.vs) / mx) * 44;
     const pos = x.vs >= 0;
     return `<div class="bar-row${x.contra ? " contra" : ""}">
-      <div class="bar-label">${x.label} <span class="tag">n=${x.n} · 적중 ${x.hit}%</span></div>
+      <div class="bar-label">${x.label} <span class="tag">n=${x.n} · 맞음 ${x.hit}%</span></div>
       <div class="bar-track">
         <span class="bar-zero"></span>
         <span class="bar-fill ${pos ? "pos" : "neg"}" style="width:${w.toFixed(1)}%;${pos ? "left:50%" : "right:50%"}"></span>
@@ -347,7 +346,7 @@ function renderCondBars(cond, baseline) {
   }).join("");
   box.className = "card";
   box.innerHTML =
-    `<div class="bar-title">기준선 ${baseline}% 대비 초과 적중률 (p)</div>
+    `<div class="bar-title">기준선 ${baseline}% 대비 초과 맞은 비율 (p)</div>
      <div class="bar-axis"><span>−${mx.toFixed(1)}p</span><span class="mid">기준선 ${baseline}%</span><span>+${mx.toFixed(1)}p</span></div>
      ${rows}
      <div class="note">초록=기준선 이김 · 붉은=기준선 짐 · 줄무늬=반례(인기 조건인데 오히려 손해).</div>`;
@@ -373,15 +372,15 @@ function renderSellBars(sell) {
   };
   const rows = bars.map((x) => `<div class="bar-row">
       <div class="bar-label">${x.label} <span class="tag">n=${x.n}</span>
-        <span class="${x.delta >= 0 ? "verif-ok" : "verif-bad"}">규칙−T+20 ${x.delta >= 0 ? "+" : "−"}${Math.abs(x.delta).toFixed(2)}p</span></div>
-      ${seg(x.rule, "fill-rule", "매도 규칙 적용")}
+        <span class="${x.delta >= 0 ? "verif-ok" : "verif-bad"}">차이 ${x.delta >= 0 ? "+" : "−"}${Math.abs(x.delta).toFixed(2)}p</span></div>
+      ${seg(x.rule, "fill-rule", "매도 규칙")}
       ${seg(x.hold, "fill-hold", "그냥 20일 보유")}
     </div>`).join("");
   box.className = "card";
   box.innerHTML =
     `<div class="bar-title">매도 규칙 전체 수익률 vs 그냥 20거래일 보유 (%)</div>
      ${rows}
-     <div class="note">주황=매도 규칙 · 파랑=그냥 보유. 검증 기간에 매도 규칙이 더 낮으면(−) 규칙은 검증에서 이점을 못 만든다.</div>`;
+     <div class="note">주황=매도 규칙 · 파랑=그냥 보유. 검증 기간에서 주황이 파랑보다 낮으면 규칙은 별 쓸모가 없는 것.</div>`;
 }
 
 async function loadResults() {
@@ -396,7 +395,7 @@ async function loadResults() {
       <td>${r.signal_date}</td>
       <td><b>${r.name || r.code}</b> <span class="tag">${r.code}</span></td>
       <td>${STRAT_KO[r.strategy] || r.strategy}</td>
-      <td class="dir-${r.direction}">${r.direction === "UP" ? "상승 ↑" : "하락 ↓"}</td>
+      <td class="dir-${r.direction}">${r.direction === "UP" ? "오름 ↑" : "내림 ↓"}</td>
       <td>${fmt(r.entry_close)}</td>
       <td>${r.settle_date || "-"}</td>
       <td>${fmt(r.settle_close)}</td>
@@ -433,7 +432,7 @@ function renderStockSignals(sigs) {
       <tr>
         <td>${s.signal_date}</td>
         <td>${STRAT_KO[s.strategy] || s.strategy}</td>
-        <td class="dir-${s.direction}">${s.direction === "UP" ? "상승 ↑" : "하락 ↓"}</td>
+        <td class="dir-${s.direction}">${s.direction === "UP" ? "오름 ↑" : "내림 ↓"}</td>
         <td>${fmt(s.entry_close)}</td>
         <td class="st-${s.status}">${STATUS_KO[s.status]}</td>
         <td>${fmt(s.settle_close)}</td>
@@ -522,6 +521,25 @@ $("#scanBtn").addEventListener("click", runScan);
 $("#searchBtn").addEventListener("click", searchStock);
 $("#codeInput").addEventListener("keydown", (e) => { if (e.key === "Enter") searchStock(); });
 
+/* 상단 탭 — 현재 보고 있는 섹션 강조 */
+function initTabs() {
+  const links = [...document.querySelectorAll(".tabs a")];
+  if (!links.length) return;
+  const mark = (id) => links.forEach((a) =>
+    a.classList.toggle("on", a.getAttribute("href") === "#" + id));
+  links.forEach((a) => a.addEventListener("click", () =>
+    setTimeout(() => mark(a.getAttribute("href").slice(1)), 400)));
+  const secs = links.map((a) => document.getElementById(a.getAttribute("href").slice(1))).filter(Boolean);
+  if (!("IntersectionObserver" in window) || !secs.length) return;
+  const io = new IntersectionObserver((es) => {
+    const vis = es.filter((e) => e.isIntersecting)
+      .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+    if (vis) mark(vis.target.id);
+  }, { rootMargin: "-110px 0px -60% 0px" });
+  secs.forEach((s) => io.observe(s));
+}
+
 (async function init() {
+  initTabs();
   await Promise.all([loadStatus(), loadToday(), loadReport(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults()]);
 })();

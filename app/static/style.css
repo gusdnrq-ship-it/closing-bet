@@ -36,7 +36,22 @@ button:hover:not(:disabled) { filter: brightness(1.1); }
 
 main { max-width: 1100px; margin: 0 auto; padding: 20px 24px 60px; }
 html { scroll-behavior: smooth; }
-section { margin-bottom: 28px; scroll-margin-top: 74px; }
+
+/* 섹션 탭 (상단 고정) */
+.tabs {
+  position: sticky; top: 57px; z-index: 9;
+  display: flex; gap: 4px; padding: 7px 16px;
+  background: rgba(15,20,32,.96); backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--line); overflow-x: auto;
+}
+.tabs a {
+  color: var(--muted); text-decoration: none; font-size: 12.5px; font-weight: 600;
+  padding: 5px 11px; border-radius: 7px; white-space: nowrap;
+}
+.tabs a:hover { color: var(--text); background: var(--panel); }
+.tabs a.on { color: #1a1a1a; background: var(--accent); }
+
+section { margin-bottom: 28px; scroll-margin-top: 104px; }
 h2 { font-size: 15px; margin: 0 0 10px; color: var(--text); }
 .tag { color: var(--muted); font-size: 12px; font-weight: 400; margin-left: 8px; }
 .card {
@@ -157,6 +172,17 @@ details.fold > summary::before { content: "▸ "; color: var(--accent); }
 details.fold[open] > summary::before { content: "▾ "; }
 details.fold > summary:hover { color: var(--text); border-color: var(--accent); }
 details.fold > .card, details.fold > .note { margin-top: 8px; }
+/* 카드 안쪽 슬림 접이식 */
+details.fold.slim { margin-top: 7px; }
+details.fold.slim > summary {
+  font-size: 11.5px; padding: 5px 9px; border: 1px dashed var(--line);
+  border-radius: 7px; color: var(--muted);
+}
+details.fold.slim > .m, details.fold.slim > .chips, details.fold.slim > ul {
+  margin-top: 7px; font-size: 11.5px;
+}
+details.fold.slim > ul { margin: 7px 0 0; padding-left: 18px; }
+details.fold.slim > ul li { margin-bottom: 3px; line-height: 1.5; }
 .star-card.is-sel { border-color: rgba(240,180,41,.55); box-shadow: 0 0 0 1px rgba(240,180,41,.18); }
 .star-card .hd { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .star-card .hd .tag { margin-left: 0; }
