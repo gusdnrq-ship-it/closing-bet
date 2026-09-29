@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 import config
-from app import db, scoreboard, sell_timing, timeline, verification
+from app import db, report, scoreboard, sell_timing, timeline, verification
 
 API_DIR = config.BASE_DIR / "app" / "static" / "api"
 
@@ -60,6 +60,10 @@ def export_api(conn=None) -> dict:
         _write("status.json", status)
         _write("today.json", today)
         _write("verification.json", verif)
+        try:
+            _write("report.json", report.build(conn))
+        except Exception as e:  # 리포트 실패는 발행 중단 사유가 아니다
+            print(f"report.json 생성 실패: {e}")
         _write("sell.json", sell_timing.build(conn))
         _write("results.json", {"items": scoreboard.recent_results(conn, 300)})
         _write("scoreboard.json", scoreboard.scoreboard(conn))

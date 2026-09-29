@@ -98,6 +98,23 @@ a:hover { text-decoration: underline; }
 .verif-ok { color: var(--hit); font-weight: 700; }
 .verif-bad { color: var(--miss); font-weight: 700; }
 .verif-mid { color: var(--accent); font-weight: 700; }
+
+/* 분석 리포트 */
+#reportHead .rate.ok { color: var(--hit); }
+#reportHead .rate.bad { color: var(--miss); }
+#reportHead .rate { font-size: 26px; }
+#reportHead .k { color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+.star-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.star-card { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.star-card .hd { font-weight: 700; margin-bottom: 2px; }
+.star-card .px { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+.star-card .px .chg { font-size: 13px; font-weight: 700; margin-left: 6px; }
+.star-card .m { color: var(--muted); font-size: 12px; line-height: 1.7; margin: 6px 0; white-space: normal; }
+.star-card ul { margin: 6px 0 0; padding-left: 18px; }
+.star-card li { font-size: 12px; line-height: 1.6; color: var(--text); margin-bottom: 3px; white-space: normal; }
+.star-card .why { font-size: 12px; color: var(--accent); line-height: 1.6; white-space: normal; }
+#report table td { white-space: normal; vertical-align: top; line-height: 1.6; }
+#report table td:not(:first-child) { white-space: nowrap; }
 #verification table { white-space: normal; }
 #verification td { vertical-align: top; }
 .tl-top { white-space: normal; line-height: 1.7; }

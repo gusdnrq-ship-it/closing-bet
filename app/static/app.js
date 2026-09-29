@@ -164,6 +164,63 @@ async function loadTimeline() {
   }
 }
 
+async function loadReport() {
+  let d;
+  try {
+    d = await staticApi("report");
+  } catch (e) {
+    for (const id of ["#reportHead", "#reportStars", "#reportCond", "#reportSell"]) $(id).innerHTML =
+      `<div class="empty">분석 리포트 없음 (export 미실행)</div>`;
+    return;
+  }
+  $("#reportMeta").textContent =
+    `5년 재실행 ${d.as_of} · 데이터 ~${d.data_through} · 표본수 병기`;
+
+  $("#reportHead").innerHTML = d.headline.map((h) => `
+    <div class="score">
+      <div class="k">${h.k}</div>
+      <div class="rate ${h.cls}">${h.v}</div>
+      <div class="detail">${h.note}</div>
+    </div>`).join("");
+  const b = d.baseline;
+  $("#reportBaseline").innerHTML =
+    `<b>기준선 (무작위로 찍어도 맞는 확률)</b>: ${b.hit_rate}% — n=${fmt(b.n)} · ` +
+    `무효(동일가) ${b.void_rate}% 제외 · 평균 등락 ${b.c2c > 0 ? "+" : ""}${b.c2c}% · ${b.note}`;
+
+  const stars = d.stars || { items: [] };
+  if (!stars.items.length) {
+    $("#reportStars").innerHTML = `<div class="empty">선택 종목 없음 (오늘 스캔 미실행 또는 신호 없음)</div>`;
+  } else {
+    $("#reportStars").className = "";
+    $("#reportStars").innerHTML = `<div class="star-grid">${stars.items.map((s) => {
+      const lv = s.levels || {};
+      const past = s.past
+        ? `<br>과거 동일 신호 ${s.past.n}건 · 적중 ${s.past.hit.toFixed(0)}% · 평균 ${s.past.avg == null ? "-" : (s.past.avg > 0 ? "+" : "") + s.past.avg.toFixed(1) + "%"}`
+        : "<br>과거 동일 신호 없음";
+      return `<div class="star-card">
+        <div class="hd">${s.name || s.code} <span class="tag">${s.code}${s.selected ? " · ★ 선택" : ""}</span></div>
+        <div class="px">${fmt(s.close)}<span class="chg ${s.ret1 >= 0 ? "dir-UP" : "dir-DOWN"}">${s.ret1 == null ? "" : (s.ret1 > 0 ? "+" : "") + s.ret1 + "%"}</span></div>
+        <div class="m">이격도 ${s.dev ?? "-"} · RSI ${s.rsi ?? "-"} · 52주 위치 ${s.pos52 ?? "-"}% · 60일 ${s.ret60 == null ? "-" : (s.ret60 > 0 ? "+" : "") + s.ret60 + "%"}<br>
+          MA5 ${fmt(s.ma5)} / MA20 ${fmt(s.ma20)} / MA60 ${fmt(s.ma60)} (${s.array}) · BB %B ${s.bb_pctb ?? "-"}<br>
+          거래량 20일평균 대비 ${s.vol_ratio ?? "-"}배 · 60일 최대낙폭 ${s.mdd60 ?? "-"}% · 60일 고가 ${fmt(lv.hi60)} / 저가 ${fmt(lv.lo60)}<br>
+          되돌림 0.382 ${fmt(lv.r382)} / 0.5 ${fmt(lv.r500)} / 0.618 ${fmt(lv.r618)}${past}</div>
+        <div class="why">선택 이유: ${s.reason || "-"}</div>
+        <ul>${(s.notes || []).map((n) => `<li>${n}</li>`).join("")}</ul>
+      </div>`;
+    }).join("")}</div>`;
+  }
+
+  const sec = (cols, rows) => `<table><thead><tr>${cols.map((c) => `<th>${c}</th>`).join("")}</tr></thead>
+    <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  const cond = d.conditions;
+  $("#reportCond").innerHTML = sec(cond.columns, cond.rows);
+  $("#reportCondNote").textContent = `⚠ ${cond.note}`;
+  const sell = d.sellcheck;
+  $("#reportSell").innerHTML = sec(sell.columns, sell.rows);
+  $("#reportSellNote").textContent = `⚠ ${sell.note}`;
+  $("#reportCaveats").textContent = d.caveats.length ? `⚠ ${d.caveats.join(" · ")}` : "";
+}
+
 async function loadResults() {
   const d = await staticApi("results");
   const tb = $("#results tbody");
@@ -193,7 +250,7 @@ async function runScan() {
     const r = await api("api/scan", { method: "POST" });
     if (!r.ok) throw new Error(r.error || "스캔 실패");
     btn.textContent = `신규 ${r.new_signals}건 · 판정 ${r.settled.HIT + r.settled.MISS}건`;
-    await Promise.all([loadStatus(), loadToday(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults()]);
+    await Promise.all([loadStatus(), loadToday(), loadReport(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults()]);
     setTimeout(() => { btn.textContent = "스캔 실행"; }, 4000);
   } catch (e) {
     const webOnly = /→ (404|405)$/.test(String(e.message));
@@ -303,5 +360,5 @@ $("#searchBtn").addEventListener("click", searchStock);
 $("#codeInput").addEventListener("keydown", (e) => { if (e.key === "Enter") searchStock(); });
 
 (async function init() {
-  await Promise.all([loadStatus(), loadToday(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults()]);
+  await Promise.all([loadStatus(), loadToday(), loadReport(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults()]);
 })();

@@ -15,7 +15,7 @@
   </div>
   <div class="head-right">
     <div id="status" class="status">불러오는 중…</div>
-    <a href="static/report.html" class="tag">분석 리포트</a>
+    <a href="#report" class="tag">분석 리포트</a>
     <button id="scanBtn">스캔 실행</button>
   </div>
 </header>
@@ -25,6 +25,26 @@
     <h2>오늘의 후보 <span id="todayDate" class="tag"></span></h2>
     <div id="today" class="card">로딩…</div>
     <div id="rankNote" class="note"></div>
+  </section>
+
+  <section id="report">
+    <h2>분석 리포트 <span id="reportMeta" class="tag">5년 재실행 기준 · 표본수 병기</span></h2>
+
+    <div id="reportHead" class="score-grid">로딩…</div>
+    <div id="reportBaseline" class="note"></div>
+
+    <h3 class="verif-title">★ 오늘의 선택 종목 — 60일 차트 해석 <span class="tag">매 스캔 자동 갱신</span></h3>
+    <div id="reportStars" class="card">로딩…</div>
+
+    <h3 class="verif-title">무작위 기준선(46.89%)을 이기는 조건 <span class="tag">5년 2,473종목 재실행 · VOID 제외</span></h3>
+    <div id="reportCond" class="card table-wrap">로딩…</div>
+    <div id="reportCondNote" class="note"></div>
+
+    <h3 class="verif-title">매도 규칙 재검증 <span class="tag">진입 T+1 시가 · TP 60일선 회귀 · SL 이전 60일 최저</span></h3>
+    <div id="reportSell" class="card table-wrap">로딩…</div>
+    <div id="reportSellNote" class="note"></div>
+
+    <div id="reportCaveats" class="note"></div>
   </section>
 
   <section>
@@ -37,9 +57,9 @@
         <tr><td class="st-HIT">적중</td><td>판정일 종가 &gt; 진입가 (↑)</td><td>참여 완료 — 기록용. 이후 재진입은 규칙 밖</td></tr>
         <tr><td class="st-MISS">미달</td><td>판정일 종가 &lt; 진입가 (↓)</td><td>참여 완료 — 기록용</td></tr>
         <tr><td class="st-VOID">무효</td><td>데이터 문제</td><td>성적에서 제외</td></tr>
-        <tr><td class="sl-tp">TP (익절)</td><td>가격이 60일 이동평균선 회귀</td><td>청산 — <b>단, breakout은 97.6%가 즉시 발동(≈T+1 매도)</b></td></tr>
+        <tr><td class="sl-tp">TP (익절)</td><td>가격이 60일 이동평균선 회귀</td><td>청산 — <b>단, breakout은 87~95%가 진입 당일 발동(≈T+1 매도)</b></td></tr>
         <tr><td class="sl-sl">SL (손절)</td><td>신호 이전 60일 최저가 하회</td>
-            <td>청산 — <b>단, 백테스트서 72%가 진입가보다 손절선이 낮아 즉시 출구 = SL 검증 실패 (caveat)</b></td></tr>
+            <td>청산 — <b>단, BNF는 88~89%가 진입 시가가 손절선 아래 → 첫날 0%대 즉시 출구 (SL 검증 실패, 상단 '분석 리포트' 참조)</b></td></tr>
         <tr><td class="sl-live">보유</td><td>TP·SL 미도달</td><td>보유 유지 (가상 추적 — 실매매 아님)</td></tr>
       </tbody>
     </table></div>
