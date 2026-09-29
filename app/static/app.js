@@ -2,7 +2,13 @@ const $ = (s) => document.querySelector(s);
 const fmt = (n) => (n == null ? "-" : Number(n).toLocaleString("ko-KR"));
 const STATUS_KO = { HIT: "맞음", MISS: "틀림", VOID: "제외", PENDING: "대기" };
 const STRAT_KO = { breakout: "신고가 돌파", ssanggul_bollinger: "쌍굴파기", bnf_oversold: "BNF 이격도80 역반등" };
+const STRAT_DESC = {
+  breakout: "최근 60일 고점을 뚫고 올라간 종목 (추세 돌파)",
+  ssanggul_bollinger: "볼린저 밴드 하단을 두 번 찍고 반등한 종목 (쌍바닥)",
+  bnf_oversold: "이격도가 80 아래로 크게 꺾였다가 반등 시도한 종목 (역반등)",
+};
 let chart = null;
+const CACHE = {};
 
 async function api(path, opts) {
   const r = await fetch(path, opts);
@@ -28,6 +34,8 @@ async function loadStatus() {
 
 async function loadToday() {
   const d = await staticApi("today");
+  CACHE.today = d;
+  renderHero();
   $("#todayDate").textContent = d.date ? `${d.date} 종가 기준 → 다음 거래일 종가로 판정` : "";
   $("#rankNote").textContent = d.rank_note || "";
   if (!d.items.length) {
@@ -37,7 +45,7 @@ async function loadToday() {
     const rows = d.items.map((s) => `
     <tr class="${s.selected ? "row-selected" : ""}" data-code="${s.code}">
       <td><b>${s.name || s.code}</b>
-        <span class="tag">${s.selected ? "★ 선택" : s.rank ? "#" + s.rank : ""} · ${STRAT_KO[s.strategy] || s.strategy}</span>
+        <span class="tag" title="${STRAT_DESC[s.strategy] || ""}">${s.selected ? "★ 선택" : s.rank ? "#" + s.rank : ""} · ${STRAT_KO[s.strategy] || s.strategy}</span>
         <a class="to-report" href="#star-${s.code}">해석 ↓</a></td>
       <td class="dir-${s.direction}">${s.direction === "UP" ? "오름 ↑" : "내림 ↓"}</td>
       <td>${fmt(s.entry_close)}</td>
@@ -87,6 +95,8 @@ async function loadSell() {
 
 async function loadScoreboard() {
   const s = await staticApi("scoreboard");
+  CACHE.scoreboard = s;
+  renderHero();
   const cards = [];
   const o = s.overall;
   cards.push(`
@@ -170,6 +180,58 @@ async function loadTimeline() {
   }
 }
 
+/* 초보자용 '한눈에 보기' — 오늘 신호 / 위험 표시 / 지난 적중률 세 칸 */
+function renderHero() {
+  const box = $("#hero");
+  if (!box) return;
+  const today = CACHE.today;
+  const stars = CACHE.report && CACHE.report.stars && CACHE.report.stars.items || [];
+  const score = CACHE.scoreboard;
+  const baseline = (CACHE.report && CACHE.report.baseline && CACHE.report.baseline.hit_rate) || 46.89;
+
+  const items = (today && today.items) || [];
+  const selected = items.filter((x) => x.selected);
+  const risk = stars.filter((s) => s.risk && s.risk.cls === "bad");
+  const warn = stars.filter((s) => s.risk && s.risk.cls === "mid");
+  const safe = stars.filter((s) => s.risk && s.risk.cls === "ok");
+
+  const o = score && score.overall;
+  const settled = o ? o.hits + o.misses : 0;
+  let verdict = "아직 판정된 예측이 없습니다.";
+  if (o && o.hit_rate != null && settled > 0) {
+    const d = o.hit_rate - baseline;
+    const cmp = d >= 1 ? "무작위보다 높다" : d <= -1 ? "무작위보다 낮다" : "무작위와 비슷하다";
+    verdict = settled < 10
+      ? `판정이 ${settled}건뿐이라 판단 불가 (무작위 기준 ${baseline}%)`
+      : `무작위(${baseline}%)보다 ${d > 0 ? "+" : ""}${d.toFixed(1)}p — ${cmp}`;
+  }
+
+  box.innerHTML = `
+    <div class="hero-steps">
+      <span><b>①</b> 오늘 신호 확인</span>
+      <span><b>②</b> <em class="v-bad">빨간 위험 표시</em>는 건드리지 말 것</span>
+      <span><b>③</b> 아래 '지난 기록'에서 적중률 확인</span>
+    </div>
+    <div class="hero-grid">
+      <div class="hero-box">
+        <div class="hero-k">오늘 신호</div>
+        <div class="hero-v ${items.length ? "" : "off"}">${items.length}<span class="unit">개</span></div>
+        <div class="hero-n">${selected.length ? `그중 ★ 선택 ${selected.length}개` : "선택된 종목 없음"}${today && today.date ? ` · ${today.date} 기준` : ""}</div>
+      </div>
+      <div class="hero-box ${risk.length ? "risk" : ""}">
+        <div class="hero-k">위험 표시</div>
+        <div class="hero-v ${risk.length ? "bad" : "off"}">${risk.length}<span class="unit">개</span></div>
+        <div class="hero-n">${risk.length ? `${risk.map((s) => s.name || s.code).join(", ")} — 폭락·과열 이력` : "주의 " + warn.length + " · 양호 " + safe.length}</div>
+      </div>
+      <div class="hero-box">
+        <div class="hero-k">지난 적중률</div>
+        <div class="hero-v ${o && o.hit_rate != null ? "" : "off"}">${o && o.hit_rate != null ? o.hit_rate + "%" : "-"}</div>
+        <div class="hero-n">${verdict}${settled ? ` · 판정 ${settled}건` : ""}</div>
+      </div>
+    </div>
+    <div class="hero-warn">⚠ 본 페이지의 모든 정보는 참고용이며 <b>매수 추천이 아닙니다</b>. 과거 데이터 기반 통계입니다.</div>`;
+}
+
 async function loadReport() {
   let d;
   try {
@@ -178,8 +240,10 @@ async function loadReport() {
     for (const id of ["#reportHead", "#reportStars", "#reportCond", "#reportSell",
                       "#reportCondBars", "#reportSellBars"]) $(id).innerHTML =
       `<div class="empty">분석 리포트 없음 (export 미실행)</div>`;
+    renderHero();
     return;
   }
+  CACHE.report = d;
   $("#reportMeta").textContent =
     `5년 재실행 ${d.as_of} · 데이터 ~${d.data_through} · 표본수 병기`;
 
@@ -197,6 +261,7 @@ async function loadReport() {
   renderStars(d.stars || { items: [] });
   renderCondBars(d.conditions, b.hit_rate);
   renderSellBars(d.sellcheck);
+  renderHero();
 
   const sec = (cols, rows) => `<table><thead><tr>${cols.map((c) => `<th>${c}</th>`).join("")}</tr></thead>
     <tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
@@ -530,13 +595,27 @@ function initTabs() {
   links.forEach((a) => a.addEventListener("click", () =>
     setTimeout(() => mark(a.getAttribute("href").slice(1)), 400)));
   const secs = links.map((a) => document.getElementById(a.getAttribute("href").slice(1))).filter(Boolean);
-  if (!("IntersectionObserver" in window) || !secs.length) return;
-  const io = new IntersectionObserver((es) => {
-    const vis = es.filter((e) => e.isIntersecting)
-      .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-    if (vis) mark(vis.target.id);
-  }, { rootMargin: "-110px 0px -60% 0px" });
-  secs.forEach((s) => io.observe(s));
+  if ("IntersectionObserver" in window && secs.length) {
+    const io = new IntersectionObserver((es) => {
+      const vis = es.filter((e) => e.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (vis) mark(vis.target.id);
+    }, { rootMargin: "-110px 0px -60% 0px" });
+    secs.forEach((s) => io.observe(s));
+  }
+  // 해시 이동 시 상대 details 펼치기 (접힌 섹션 안으로 점프하는 링크용)
+  const openForHash = () => {
+    const id = location.hash.slice(1);
+    if (!id) return;
+    const el = document.getElementById(id);
+    if (!el) return;
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      if (p.tagName === "DETAILS") p.open = true;
+    }
+  };
+  links.forEach((a) => a.addEventListener("click", openForHash));
+  window.addEventListener("hashchange", openForHash);
+  openForHash();
 }
 
 (async function init() {

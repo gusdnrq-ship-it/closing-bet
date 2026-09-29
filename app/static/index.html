@@ -11,7 +11,7 @@
 <header>
   <div class="head-left">
     <h1>종가배팅</h1>
-    <span class="sub">내일 종가 방향 베팅 시그널 · 적중률 스코어보드</span>
+    <span class="sub">내일 종가가 오를지 미리 표시합니다 · 매매 추천 아님</span>
   </div>
   <div class="head-right">
     <div id="status" class="status">불러오는 중…</div>
@@ -20,117 +20,124 @@
 </header>
 
 <nav class="tabs">
-  <a href="#today-sec">오늘</a>
-  <a href="#report">전략 검증</a>
-  <a href="#sell-sec">매도 타이밍</a>
-  <a href="#perf-sec">성적</a>
-  <a href="#log-sec">기록</a>
-  <a href="#etc-sec">참고</a>
+  <a href="#today-sec" class="on">1. 오늘</a>
+  <a href="#log-sec">2. 지난 기록</a>
+  <a href="#detail-sec">3. 상세히 보기</a>
 </nav>
 
 <main>
-  <!-- 1. 오늘의 후보 + 해석 -->
+  <!-- 1. 오늘 -->
   <section id="today-sec">
-    <h2>오늘의 후보 <span id="todayDate" class="tag"></span></h2>
+    <div id="hero" class="hero">불러오는 중…</div>
+
+    <h2>오늘 신호가 나온 종목 <span id="todayDate" class="tag"></span></h2>
     <div id="today" class="card">로딩…</div>
     <div id="rankNote" class="note"></div>
 
-    <h3 class="verif-title">해석 <span class="tag">매 스캔 자동 갱신</span></h3>
+    <h2>이 종목들은 지금 어떤 상태인가? <span class="tag">매 스캔 자동 갱신</span></h2>
     <div id="reportStarsSummary" class="note"></div>
     <div id="reportStars" class="card">로딩…</div>
   </section>
 
-  <!-- 2. 전략 검증 -->
-  <section id="report">
-    <h2>전략 검증 <span id="reportMeta" class="tag">5년 재실행 · 표본수 병기</span></h2>
-
-    <div id="reportHead" class="score-grid">로딩…</div>
-    <div id="reportBaseline" class="note"></div>
-
-    <div class="howto">
-      <b>한 줄 요약</b> 무작위로 찍어도 <b>46.89%</b>는 맞는다. 이것을 넘는 전략만 남긴다 →
-      지금까지 <b>BNF 과매도 역반등(+10.4p)</b>만 기준선을 이긴다. 신고가 돌파는 −1.4p로 기준선보다 못하다.<br>
-      막대그래프 <b>초록=기준선 이김 · 붉음=기준선 짐 · 줄무늬=반례(인기 조건인데 오히려 손해)</b>.
-      자세한 표는 필요할 때만 펼쳐 본다. 지표에 마우스를 올리면 풀이가 뜬다.
-    </div>
-
-    <h3 class="verif-title">무작위 기준선을 이기는 조건 <span class="tag">5년 2,473종목</span></h3>
-    <div id="reportCondBars" class="card">로딩…</div>
-    <details class="fold">
-      <summary>자세한 표 (표본수 · 개발/검증 분리)</summary>
-      <div id="reportCond" class="card table-wrap">로딩…</div>
-      <div id="reportCondNote" class="note"></div>
-    </details>
-
-    <h3 class="verif-title">매도 규칙 재검증 <span class="tag">진입 T+1 시가 · TP 60일선 · SL 60일 최저</span></h3>
-    <div id="reportSellBars" class="card">로딩…</div>
-    <details class="fold">
-      <summary>자세한 표 (TP/SL 비중 · 신호수)</summary>
-      <div id="reportSell" class="card table-wrap">로딩…</div>
-      <div id="reportSellNote" class="note"></div>
-    </details>
-
-    <div id="reportCaveats" class="note"></div>
-  </section>
-
-  <!-- 3. 매도 타이밍 -->
-  <section id="sell-sec">
-    <h2>매도 타이밍 <span class="tag">가상 시뮬레이션 (실제 보유 아님)</span></h2>
-    <div id="sell" class="card">로딩…</div>
-    <div id="sellCaveat" class="note"></div>
-
-    <details class="fold">
-      <summary>결과 표시어 뜻 보기</summary>
-      <div class="card table-wrap"><table>
-        <thead><tr><th>표시</th><th>뜻</th></tr></thead>
-        <tbody>
-          <tr><td class="sl-pending"><b>대기</b></td><td>신호는 났지만 아직 진입 전</td></tr>
-          <tr><td class="sl-live"><b>보유</b></td><td>진입 후 — 목표·손절 어느 쪽에도 닿지 않음</td></tr>
-          <tr><td class="sl-tp"><b>목표 도달</b></td><td>60일 이동평균선에 도달해 매도. <b>수익 보장은 아님</b> — 진입가가 60일선보다 낮으면 손실로 체결</td></tr>
-          <tr><td class="sl-sl"><b>손절 도달</b></td><td>신호 이전 60거래일 최저가 아래로 떨어져 매도. 진입가보다 손절선이 위면 수익률 0%로 즉시 체결</td></tr>
-          <tr><td class="st-HIT"><b>맞음</b></td><td>판정일 종가 &gt; 진입가</td></tr>
-          <tr><td class="st-MISS"><b>틀림</b></td><td>판정일 종가 &lt; 진입가</td></tr>
-          <tr><td class="st-VOID"><b>제외</b></td><td>데이터 문제 — 성적에서 제외</td></tr>
-        </tbody>
-      </table></div>
-      <div class="note">판단 순서: ① 오늘의 후보에서 신호 확인 → ② 신호 다음 거래일이 오늘인가? →
-        ③ 그날 종가에 맞음/틀림 확정. 진입 창 = 장 시작 시가, 판정 = 당일 종가.</div>
-    </details>
-  </section>
-
-  <!-- 4. 성적 -->
-  <section id="perf-sec">
-    <h2>성적 <span class="tag">공개 데이터 · 표본수·기간 병기</span></h2>
-    <div id="scoreboard" class="card">로딩…</div>
-    <div id="verification" class="card">로딩…</div>
-    <div id="verifCaveats" class="note"></div>
-  </section>
-
-  <!-- 5. 기록 -->
+  <!-- 2. 지난 기록 -->
   <section id="log-sec">
-    <h2>기록 <span class="tag">git · Actions에 타임스탬프 보존 — 과거 발언 변조 불가</span></h2>
-    <div id="timeline" class="card table-wrap">로딩…</div>
+    <h2>지난 예측, 실제로 맞았나?</h2>
+    <div class="howto">
+      여기가 <b>이 페이지에서 가장 중요한 자리</b>입니다. 아래 <b>맞은 비율</b>이
+      46.89%(무작위로 찍어도 맞을 확률)보다 높아야 그 전략을 믿을 수 있습니다.
+      <b>판정 건수</b>가 10건 미만이면 아무리 높아도 우연일 수 있습니다.
+    </div>
+    <div id="scoreboard" class="card">로딩…</div>
+
+    <h2>최근 판정 결과</h2>
     <div class="card table-wrap"><table id="results"><thead>
-      <tr><th>시그널일</th><th>종목</th><th>전략</th><th>방향</th><th>진입가</th><th>판정일</th><th>종가</th><th>등락</th><th>판정</th></tr>
+      <tr><th>시그널일</th><th>종목</th><th>전략</th><th>방향</th><th>진입가</th><th>판정일</th><th>종가</th><th>등락</th><th>결과</th></tr>
     </thead><tbody></tbody></table></div>
   </section>
 
-  <!-- 6. 참고 -->
-  <section id="etc-sec">
-    <h2>참고</h2>
+  <!-- 3. 상세히 보기 -->
+  <section id="detail-sec">
+    <h2>상세히 보기 <span class="tag">평소엔 접어두어도 됩니다</span></h2>
 
-    <div class="search">
-      <input id="codeInput" placeholder="종목코드 6자리 (예: 005930)" maxlength="6">
-      <button id="searchBtn">조회</button>
-      <span id="stockName" class="tag"></span>
-    </div>
-    <div class="card"><canvas id="chart" height="90"></canvas></div>
-    <div class="card table-wrap"><table id="stockSignals"><thead>
-      <tr><th>시그널일</th><th>전략</th><th>방향</th><th>진입가</th><th>판정</th><th>결제가</th></tr>
-    </thead><tbody></tbody></table></div>
+    <details class="fold" id="report">
+      <summary>전략 검증 — 5년 백테스트로 어떤 전략이 이기는지</summary>
+      <div id="reportMeta" class="tag"></div>
+      <div id="reportHead" class="score-grid">로딩…</div>
+      <div id="reportBaseline" class="note"></div>
+      <div class="howto">
+        <b>한 줄 요약</b> 무작위로 찍어도 <b>46.89%</b>는 맞는다. 이것을 넘는 전략만 남긴다 →
+        지금까지 <b>BNF 과매도 역반등(+10.4p)</b>만 기준선을 이긴다. 신고가 돌파는 −1.4p로 기준선보다 못하다.<br>
+        막대 <b>초록=기준선 이김 · 붉음=기준선 짐 · 줄무늬=반례(인기 조건인데 오히려 손해)</b>.
+        지표에 마우스를 올리면 풀이가 뜹니다.
+      </div>
 
-    <details class="fold">
-      <summary>용어 사전 (지표·용어 11가지)</summary>
+      <h3 class="verif-title">무작위 기준선을 이기는 조건</h3>
+      <div id="reportCondBars" class="card">로딩…</div>
+      <details class="fold">
+        <summary>자세한 표 (표본수 · 개발/검증 분리)</summary>
+        <div id="reportCond" class="card table-wrap">로딩…</div>
+        <div id="reportCondNote" class="note"></div>
+      </details>
+
+      <h3 class="verif-title">매도 규칙 재검증</h3>
+      <div id="reportSellBars" class="card">로딩…</div>
+      <details class="fold">
+        <summary>자세한 표 (목표/손절 비중 · 신호수)</summary>
+        <div id="reportSell" class="card table-wrap">로딩…</div>
+        <div id="reportSellNote" class="note"></div>
+      </details>
+
+      <div id="reportCaveats" class="note"></div>
+    </details>
+
+    <details class="fold" id="sell-sec">
+      <summary>매도 타이밍 — 규칙대로 팔았다면 어떻게 됐을까 (가상 시뮬레이션)</summary>
+      <div id="sell" class="card">로딩…</div>
+      <div id="sellCaveat" class="note"></div>
+      <details class="fold">
+        <summary>결과 표시어 뜻 보기</summary>
+        <div class="card table-wrap"><table>
+          <thead><tr><th>표시</th><th>뜻</th></tr></thead>
+          <tbody>
+            <tr><td class="sl-pending"><b>대기</b></td><td>신호는 났지만 아직 진입 전</td></tr>
+            <tr><td class="sl-live"><b>보유</b></td><td>진입 후 — 목표·손절 어느 쪽에도 닿지 않음</td></tr>
+            <tr><td class="sl-tp"><b>목표 도달</b></td><td>60일 이동평균선에 도달해 팔림. <b>수익 보장은 아님</b> — 진입가가 60일선보다 낮으면 손실로 체결</td></tr>
+            <tr><td class="sl-sl"><b>손절 도달</b></td><td>신호 이전 60거래일 최저가 아래로 떨어져 팔림. 손절선이 진입가보다 위면 수익률 0%로 즉시 체결</td></tr>
+            <tr><td class="st-HIT"><b>맞음</b></td><td>판정일 종가 &gt; 진입가</td></tr>
+            <tr><td class="st-MISS"><b>틀림</b></td><td>판정일 종가 &lt; 진입가</td></tr>
+            <tr><td class="st-VOID"><b>제외</b></td><td>데이터 문제 — 성적에서 제외</td></tr>
+          </tbody>
+        </table></div>
+        <div class="note">판단 순서: ① 오늘의 신호 확인 → ② 신호 다음 거래일이 오늘인가? →
+          ③ 그날 종가에 맞음/틀림 확정. 진입 창 = 장 시작 시가, 판정 = 당일 종가.</div>
+      </details>
+    </details>
+
+    <details class="fold" id="perf-sec">
+      <summary>검증 근거 — 표본수와 기간이 공개된 백테스트 상세</summary>
+      <div id="verification" class="card">로딩…</div>
+      <div id="verifCaveats" class="note"></div>
+    </details>
+
+    <details class="fold" id="log-sec2">
+      <summary>예측 기록 — git·Actions에 날짜가 남아 과거 발언을 바꿀 수 없음</summary>
+      <div id="timeline" class="card table-wrap">로딩…</div>
+    </details>
+
+    <details class="fold" id="etc-sec">
+      <summary>종목 조회 · 용어 사전 · 유의사항</summary>
+
+      <div class="search">
+        <input id="codeInput" placeholder="종목코드 6자리 (예: 005930)" maxlength="6">
+        <button id="searchBtn">조회</button>
+        <span id="stockName" class="tag"></span>
+      </div>
+      <div class="card"><canvas id="chart" height="90"></canvas></div>
+      <div class="card table-wrap"><table id="stockSignals"><thead>
+        <tr><th>시그널일</th><th>전략</th><th>방향</th><th>진입가</th><th>판정</th><th>결제가</th></tr>
+      </thead><tbody></tbody></table></div>
+
+      <h3 class="verif-title">용어 사전</h3>
       <div class="card table-wrap"><table>
         <thead><tr><th style="width:24%">용어</th><th>뜻</th><th>읽는 법</th></tr></thead>
         <tbody>
@@ -138,7 +145,7 @@
               <td>전략 없이 무작위로 찍어도 다음날 오를 확률 (46.89%)</td>
               <td>이것을 넘어야 "잘 찍은 것". 못 넘으면 동전 던지기보다 못한 것</td></tr>
           <tr><td><b>맞은 비율</b></td><td>판정된 시그널 중 진입가보다 종가가 높았던 비율</td>
-              <td>항상 <b>표본수(n)</b>와 함께 봐야 함. 10건 미만은 통계 무의미</td></tr>
+              <td>항상 <b>표본수</b>와 함께 봐야 함. 10건 미만은 통계 무의미</td></tr>
           <tr><td><b>이격도</b></td><td>현재가 ÷ 60일 평균 × 100</td>
               <td>100=평균과 같음 · 156=평균보다 56% 비쌈(과열) · 54=평균보다 46% 쌈(하락)</td></tr>
           <tr><td><b>RSI</b></td><td>최근 오른 힘의 비율 (0~100)</td>
@@ -163,13 +170,11 @@
               <td>개발에서만 좋으면 과적합. <b>검증에서 이겨야 진짜</b></td></tr>
         </tbody>
       </table></div>
-    </details>
 
-    <details class="fold">
-      <summary>유의사항</summary>
+      <h3 class="verif-title">유의사항</h3>
       <div class="note">시그널은 참고용 정보이며 <b>매매 추천이 아닙니다</b>. 맞은 비율은 표본수와 함께 확인하세요.
         표본 10건 미만은 통계적 유의성이 없습니다. 데이터 출처: 네이버 증권 (read-only).
-        모든 예측은 git 커밋·Actions 로그에 타임스탬프로 보존되어 '기록'에서 직접 감사할 수 있습니다.</div>
+        모든 예측은 git 커밋·Actions 로그에 타임스탬프로 보존되어 '예측 기록'에서 직접 감사할 수 있습니다.</div>
     </details>
   </section>
 </main>
