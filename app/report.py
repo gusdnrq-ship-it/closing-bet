@@ -27,6 +27,75 @@ BASELINE = {
     "note": "전 종목·전 거래일 무작위 베팅 (다음 날 오르면 적중). VOID(동일가) 5.99% 제외.",
 }
 
+# 조건 실험 원자료 — 표와 막대차트를 같은 숫자에서 뽑아내므로 표·차트가 절대 어긋나지 않는다.
+# (표기라벨, n, 적중률%, T→T+1%, 개발/검증 적중%, is_contrary)
+_CONDITIONS = [
+    ("돌파폭≥10% & 대금≥100억 & RSI≥80", "2,040", 50.6, "+0.843", "49.4 / 51.3", False),
+    ("돌파폭≥10% & RSI≥80", "3,509", 50.3, "+1.457", "49.4 / 50.8", False),
+    ("돌파폭≥10% & 대금≥100억", "4,402", 50.0, "+0.723", "51.0 / 49.5", False),
+    ("대금&lt;10억 & 돌파폭&lt;3% (소형 약돌파)", "16,521", 48.4, "+0.267", "48.6 / 48.2", False),
+    ("돌파폭≥10% 단독", "7,811", 48.2, "+0.991", "49.3 / 47.7", False),
+    ("breakout 전체 (요약)", "69,063", 45.5, "+0.188", "45.1 / 45.8", False),
+    ("반례: 거래량≥15배", "10,739", 41.1, "−0.079", "—", True),
+    ("반례: 대금≥100억 단독", "21,099", 45.6, "+0.073", "—", True),
+    ("BNF 전체", "24,550", 57.3, "+1.015", "57.8 / 57.0", False),
+    ("BNF 중 당일 −10% 이하 폭락", "2,660", 71.5, "+2.853", "—", False),
+]
+
+# 매도 규칙 원자료 — (표기라벨, 신호수, TP%, SL%, 규칙%, T+20%, 규칙−T+20p)
+_SELL = [
+    ("breakout 개발", "27,865", 96.7, 3.3, -0.49, -1.35, 0.86),
+    ("breakout 검증", "41,216", 98.2, 1.7, -0.49, 0.42, -0.91),
+    ("BNF 개발", "10,355", 5.1, 94.8, 0.58, 7.14, -6.56),
+    ("BNF 검증", "14,171", 4.1, 95.7, 0.27, 2.08, -1.80),
+    ("쌍굴 개발", "54", 55.6, 42.6, -1.06, 1.65, -2.71),
+    ("쌍굴 검증", "152", 67.8, 30.3, 1.09, -0.37, 1.46),
+]
+
+
+def _pct(v: float) -> str:
+    return f"{v:+.2f}%" if v >= 0 else f"−{abs(v):.2f}%"
+
+
+def _cond_block() -> dict:
+    base = BASELINE["hit_rate"]
+    rows = [[lab, n, f"{hit}", f"{hit - base:+.1f}p" if hit >= base else f"−{abs(hit - base):.1f}p",
+             f"{ret}%", dev, "반례" if contra else ("기준선 상회" if hit > base else "기준선 하회")]
+            for lab, n, hit, ret, dev, contra in _CONDITIONS]
+    return {
+        "title": "무작위 46.89%를 이기는 조건 (5년 재실행 · VOID 제외)",
+        "columns": ["조건", "n", "적중%", "기준선 대비", "T→T+1", "개발 / 검증 적중", "판정"],
+        "rows": rows,
+        "baseline": base,
+        # 막대차트: 적중률 − 기준선 (p) — 양수=기준선 이김, 음수=기준선 짐
+        "bars": [
+            {"label": lab.replace("&lt;", "<").replace("&gt;", ">"), "n": n,
+             "hit": hit, "vs": round(hit - base, 2), "contra": contra}
+            for lab, n, hit, _ret, _dev, contra in _CONDITIONS
+        ],
+        "note": "최대 우위도 +3.7p(50.6 vs 46.89). 표본 2,040건·별건 과적합 위험. "
+                "'인기가 많은 조건'(대금≥100억, 거래량≥15배, 당일≥7%)은 오히려 기준선 이하.",
+    }
+
+
+def _sell_block() -> dict:
+    rows = [[lab, n, f"{tp}%", f"{sl}%", _pct(rule), _pct(hold),
+             f"{d:+.2f}p" if d >= 0 else f"−{abs(d):.2f}p"]
+            for lab, n, tp, sl, rule, hold, d in _SELL]
+    return {
+        "title": "매도 규칙 5년 재검증 (진입=T+1 시가 · TP=60일선 회귀 · SL=이전 60일 최저)",
+        "columns": ["전략·기간", "신호", "TP", "SL", "규칙 전체", "T+20 보유", "규칙−T+20"],
+        "rows": rows,
+        # 대조 차트: 규칙 전체 vs 그냥 20거래일 보유 (%)
+        "bars": [{"label": lab, "n": n, "rule": rule, "hold": hold, "delta": delta}
+                 for lab, n, _tp, _sl, rule, hold, delta in _SELL],
+        "note": "breakout TP는 87~95%가 진입 당일 발동 → 'T+1 종가 매도'와 거의 동일 "
+                "(개발에선 +0.86p, 검증에선 −0.91p = 검증에서 이기지 못함). "
+                "BNF는 손절선이 진입 시가보다 아래 → 88~89%가 첫날 0%대 손절, 5%만 TP. "
+                "쌍굴 n=206 = 표본 부족, 통계적 유의성 없음.",
+    }
+
+
 
 def _static() -> dict:
     return {
@@ -44,46 +113,38 @@ def _static() -> dict:
             {"k": "매도 규칙", "v": "실패 2건", "cls": "bad",
              "note": "breakout은 ≈T+1 매도 · BNF는 손절이 이점을 제거(−6.56p)"},
         ],
-        "conditions": {
-            "title": "무작위 46.89%를 이기는 조건 (5년 재실행 · VOID 제외)",
-            "columns": ["조건", "n", "적중%", "T→T+1", "개발 / 검증 적중"],
-            "rows": [
-                ["돌파폭≥10% & 대금≥100억 & RSI≥80", "2,040", "50.6", "+0.843%", "49.4 / 51.3"],
-                ["돌파폭≥10% & RSI≥80", "3,509", "50.3", "+1.457%", "49.4 / 50.8"],
-                ["돌파폭≥10% & 대금≥100억", "4,402", "50.0", "+0.723%", "51.0 / 49.5"],
-                ["대금&lt;10억 & 돌파폭&lt;3% (소형 약돌파)", "16,521", "48.4", "+0.267%", "48.6 / 48.2"],
-                ["돌파폭≥10% 단독", "7,811", "48.2", "+0.991%", "49.3 / 47.7"],
-                ["breakout 전체 (요약)", "69,063", "45.5", "+0.188%", "45.1 / 45.8"],
-                ["반례: 거래량≥15배", "10,739", "41.1", "−0.079%", "—"],
-                ["반례: 대금≥100억 단독", "21,099", "45.6", "+0.073%", "—"],
-                ["BNF 전체", "24,550", "57.3", "+1.015%", "57.8 / 57.0"],
-                ["BNF 중 당일 −10% 이하 폭락", "2,660", "71.5", "+2.853%", "—"],
-            ],
-            "note": "최대 우위도 +3.7p(50.6 vs 46.89). 표본 2,040건·별건 과적합 위험. "
-                    "'인기가 많은 조건'(대금≥100억, 거래량≥15배, 당일≥7%)은 오히려 기준선 이하.",
-        },
-        "sellcheck": {
-            "title": "매도 규칙 5년 재검증 (진입=T+1 시가 · TP=60일선 회귀 · SL=이전 60일 최저)",
-            "columns": ["전략·기간", "신호", "TP", "SL", "규칙 전체", "T+20 보유", "규칙−T+20"],
-            "rows": [
-                ["breakout 개발", "27,865", "96.7%", "3.3%", "−0.49%", "−1.35%", "+0.86p"],
-                ["breakout 검증", "41,216", "98.2%", "1.7%", "−0.49%", "+0.42%", "−0.91p"],
-                ["BNF 개발", "10,355", "5.1%", "94.8%", "+0.58%", "+7.14%", "−6.56p"],
-                ["BNF 검증", "14,171", "4.1%", "95.7%", "+0.27%", "+2.08%", "−1.80p"],
-                ["쌍굴 개발", "54", "55.6%", "42.6%", "−1.06%", "+1.65%", "−2.71p"],
-                ["쌍굴 검증", "152", "67.8%", "30.3%", "+1.09%", "−0.37%", "+1.46p"],
-            ],
-            "note": "breakout TP는 87~95%가 진입 당일 발동 → 'T+1 종가 매도'와 거의 동일 "
-                    "(개발에선 +0.86p, 검증에선 −0.91p = 검증에서 이기지 못함). "
-                    "BNF는 손절선이 진입 시가보다 아래 → 88~89%가 첫날 0%대 손절, 5%만 TP. "
-                    "쌍굴 n=206 = 표본 부족, 통계적 유의성 없음.",
-        },
+        "conditions": _cond_block(),
+        "sellcheck": _sell_block(),
         "caveats": [
             "전부 과거 데이터 in-sample 조사 — 매개변수 최적화는 개발기간(~2023-12), 신뢰는 검증기간(2024~).",
             "표본 10건 미만은 통계적 유의성이 없다 (쌍굴 검증 152건 포함 대부분의 개별 종목 신호).",
             "슬리피지·수수료·상하한가 미반영. 본 리포트는 매수·매도 추천이 아니다.",
         ],
     }
+
+
+def _risk_tag(row: dict, past: dict | None) -> dict:
+    """종목 하나의 종합 위험 배지 — 초보자가 한 줄로 판단할 수 있게 색·라벨을 준다."""
+    dev, rsi, vr = row.get("dev"), row.get("rsi"), row.get("vol_ratio")
+    why = []
+    if dev is not None and dev >= 130:
+        why.append(f"이격도 {dev:.0f} (60일선 위 30%)")
+    if rsi is not None and rsi >= 70:
+        why.append(f"RSI {rsi:.0f} 과열")
+    if vr is not None and vr >= 5:
+        why.append(f"거래량 {vr:.1f}배 폭증")
+    if row.get("streak3"):
+        why.append("3일 연속 급등")
+    if past and past["n"] >= 10 and past.get("avg") is not None and past["avg"] < 0:
+        why.append(f"과거 동일 신호 평균 {past['avg']:+.1f}%")
+
+    if len(why) >= 2:
+        label, cls = "위험", "bad"
+    elif len(why) == 1:
+        label, cls = "주의", "mid"
+    else:
+        label, cls = "관찰", "ok"
+    return {"label": label, "cls": cls, "why": why}
 
 
 def _plain_notes(row: dict, past: dict | None) -> list[str]:
@@ -191,6 +252,14 @@ def _star_pattern(conn, code: str) -> dict | None:
             big.append({"date": str(df["date"].iloc[i])[:10], "ret": round(float(r), 1)})
     big = big[-6:]
 
+    # 60일 미니차트용 시계열 (스파크라인 — 프론트에서 즉시 그리기)
+    t = d.tail(60)
+    series = {
+        "d": [str(x)[5:10] for x in df["date"].tail(60)],
+        "c": [int(round(float(x))) for x in t["close"]],
+        "ma": [int(round(float(x))) if pd.notna(x) else None for x in t["ma"]],
+    }
+
     # 과거 동일 종목 신호 성적
     rows = conn.execute(
         "SELECT status, entry_close, settle_close FROM signals "
@@ -239,6 +308,8 @@ def _star_pattern(conn, code: str) -> dict | None:
             "r618": round(hi60 - rng60 * 0.618) if rng60 > 0 else None,
         },
         "big_moves": big,
+        "series": series,
+        "risk": _risk_tag(row, past),
         "past": past,
         "past_all_n": past["n"] if past else 0,
         "total_signals": conn.execute(

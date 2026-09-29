@@ -33,16 +33,32 @@
     <div id="reportHead" class="score-grid">로딩…</div>
     <div id="reportBaseline" class="note"></div>
 
+    <div class="howto">
+      <b>이 리포트 읽는 법</b> ① <b>기준선 46.89%</b>를 먼저 이해한다 — 무작위로 찍어도 맞는 확률이라
+      어떤 전략이든 이것을 넘어야 "잘 찍은 것". ② <b>막대그래프</b>에서 초록 막대(기준선 이김)만 남기고
+      붉은 막대는 버린다. ③ ★종목은 <b>위험 배지</b>가 "위험"이면 근처에도 가기 전에 다시 생각한다.
+      ④ 표는 필요할 때만 펼쳐 본다.
+    </div>
+
     <h3 class="verif-title">★ 오늘의 선택 종목 — 60일 차트 해석 <span class="tag">매 스캔 자동 갱신</span></h3>
+    <div id="reportStarsSummary" class="note"></div>
     <div id="reportStars" class="card">로딩…</div>
 
     <h3 class="verif-title">무작위 기준선(46.89%)을 이기는 조건 <span class="tag">5년 2,473종목 재실행 · VOID 제외</span></h3>
-    <div id="reportCond" class="card table-wrap">로딩…</div>
-    <div id="reportCondNote" class="note"></div>
+    <div id="reportCondBars" class="card">로딩…</div>
+    <details class="fold">
+      <summary>자세한 표 보기 (표본수 · 개발/검증 분리)</summary>
+      <div id="reportCond" class="card table-wrap">로딩…</div>
+      <div id="reportCondNote" class="note"></div>
+    </details>
 
     <h3 class="verif-title">매도 규칙 재검증 <span class="tag">진입 T+1 시가 · TP 60일선 회귀 · SL 이전 60일 최저</span></h3>
-    <div id="reportSell" class="card table-wrap">로딩…</div>
-    <div id="reportSellNote" class="note"></div>
+    <div id="reportSellBars" class="card">로딩…</div>
+    <details class="fold">
+      <summary>자세한 표 보기 (TP/SL 비중 · 신호수)</summary>
+      <div id="reportSell" class="card table-wrap">로딩…</div>
+      <div id="reportSellNote" class="note"></div>
+    </details>
 
     <div id="reportCaveats" class="note"></div>
   </section>
