@@ -63,22 +63,31 @@ async function loadSell() {
     return;
   }
   const STATE_CLS = { PENDING: "sl-pending", LIVE: "sl-live", TP: "sl-tp", SL: "sl-sl" };
+  const STATE_KO = {
+    PENDING: "진입 대기", LIVE: "보유 중",
+    TP: "목표 도달 (60일선 회귀)", SL: "손절선 도달 (60일 최저)",
+  };
   const rows = d.items.map((s) => `
     <tr>
       <td><b>${s.name || s.code}</b> <span class="tag">${s.code}</span></td>
       <td>${s.signal_date}</td>
       <td>${s.entry_date || "미진입"} @ ${fmt(s.entry_price)}</td>
       <td>${fmt(s.current)}</td>
-      <td class="${s.ret_pct == null ? "" : s.ret_pct >= 0 ? "dir-UP" : "dir-DOWN"}">
+      <td class="${s.ret_pct == null ? "" : s.ret_pct >= 0 ? "dir-UP" : "dir-DOWN"}"
+          title="진입가 대비 변동률. 목표·손절에 도달했으면 체결가 기준">
         ${s.ret_pct == null ? "-" : (s.ret_pct > 0 ? "+" : "") + s.ret_pct + "%"}</td>
-      <td>${fmt(s.stop)} <span class="tag">목표 ${fmt(s.target)}</span></td>
-      <td class="${STATE_CLS[s.state]}">${s.state_ko}${s.exit_date ? ` (${s.exit_date})` : ""}</td>
+      <td><span title="손절선 = 신호 이전 60거래일 최저가 (그 아래로 떨어지면 매도)">${fmt(s.stop)}</span>
+        <span class="tag" title="목표 = 60일 이동평균선 (그곳까지 오르면 매도). 단, 진입가보다 낮을 수 있음">목표 ${fmt(s.target)}</span></td>
+      <td class="${STATE_CLS[s.state]}" title="${STATE_KO[s.state] || s.state_ko}">${STATE_KO[s.state] || s.state_ko}${s.exit_date ? ` (${s.exit_date})` : ""}</td>
     </tr>`).join("");
   $("#sell").className = "card table-wrap";
   $("#sell").innerHTML = `<table><thead><tr>
-    <th>종목</th><th>신호일</th><th>진입 (T+1 시가)</th><th>현재</th><th>수익률</th>
-    <th>손절선 / 목표</th><th>상태</th>
-    </tr></thead><tbody>${rows}</tbody></table>`;
+    <th>종목</th><th>신호일</th><th>진입 (T+1 시가)</th><th>현재</th><th title="진입가 대비 변동률">수익률</th>
+    <th title="왼쪽=손절선(신호 이전 60일 최저) · 오른쪽=목표(60일 이동평균)">손절선 / 목표</th><th>상태</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+    <div class="note">⚠ <b>"목표 도달"이 곧 수익은 아님</b> — 목표가(60일선)가 진입가보다 낮으면 손실로 체결된다.
+    <b>"손절선 도달"에 수익률 0%</b>인 건 손절선이 진입가보다 위에서 열렸기 때문(첫날 즉시 체결).
+    이 표는 "규칙대로 팔았다면 이렇다"는 <b>가상 시뮬레이션</b>이며 실제 보유가 아니다.</div>`;
 }
 
 async function loadScoreboard() {
@@ -261,14 +270,22 @@ function renderStars(stars) {
       `<span class="chip ${m.ret >= 0 ? "dir-UP" : "dir-DOWN"}">${m.date.slice(5)} ${m.ret > 0 ? "+" : ""}${m.ret}%</span>`).join("");
     return `<div class="star-card ${s.selected ? "is-sel" : ""}" id="star-${s.code}">
       <div class="hd">${s.name || s.code} <span class="tag">${s.code}${s.selected ? " · ★ 선택" : ""}</span>
-        <span class="risk r-${risk.cls}">${risk.label}</span></div>
+        <span class="risk r-${risk.cls}" title="위험 조건이 2개 이상이면 위험, 1개면 주의, 0개면 관찰">${risk.label}</span></div>
+      <div class="verdict v-${risk.cls}">${verdictLine(s, risk)}</div>
       <div class="px">${fmt(s.close)}<span class="chg ${s.ret1 >= 0 ? "dir-UP" : "dir-DOWN"}">${s.ret1 == null ? "" : (s.ret1 > 0 ? "+" : "") + s.ret1 + "%"}</span></div>
       ${sparkSVG(s)}
       <div class="spark-lg">60일 종가(주황) · 60일선(파랑 점선) · 60일 고가/저가(가로 점선)</div>
-      <div class="m">이격도 ${s.dev ?? "-"} · RSI ${s.rsi ?? "-"} · 52주 위치 ${s.pos52 ?? "-"}% · 60일 ${s.ret60 == null ? "-" : (s.ret60 > 0 ? "+" : "") + s.ret60 + "%"}<br>
-        MA5 ${fmt(s.ma5)} / MA20 ${fmt(s.ma20)} / MA60 ${fmt(s.ma60)} (${s.array}) · BB %B ${s.bb_pctb ?? "-"}<br>
-        거래량 20일평균 대비 ${s.vol_ratio ?? "-"}배 · 60일 최대낙폭 ${s.mdd60 ?? "-"}% · 60일 고가 ${fmt(lv.hi60)} / 저가 ${fmt(lv.lo60)}<br>
-        되돌림 0.382 ${fmt(lv.r382)} / 0.5 ${fmt(lv.r500)} / 0.618 ${fmt(lv.r618)}<br>${past}</div>
+      <div class="m">
+        <span title="현재가를 60일 평균으로 나눈 값. 100=평균과 같음, 156=평균보다 56% 비쌈(과열)">이격도 ${s.dev ?? "-"}</span> ·
+        <span title="최근 오른 힘의 비율. 70↑=과열(오를 힘 소진) · 30↓=과매도(팔 만큼 팔림)">RSI ${s.rsi ?? "-"}</span> ·
+        <span title="1년 최저~최고 사이 중 현재 위치. 0%=1년 최저, 100%=1년 최고">52주 위치 ${s.pos52 ?? "-"}%</span> ·
+        <span title="60거래일 전 대비 등락률">60일 ${s.ret60 == null ? "-" : (s.ret60 > 0 ? "+" : "") + s.ret60 + "%"}<br></span><br>
+        <span title="5·20·60일 이동평균. 정배열=단기>중기>장기(상승 추세), 역배열=반대(하락 추세)">MA5 ${fmt(s.ma5)} / MA20 ${fmt(s.ma20)} / MA60 ${fmt(s.ma60)} (${s.array})</span> ·
+        <span title="볼린저밴드 상단 위치. 100↑=밴드 위로 돌파, 0↓=밴드 아래로 이탈">BB %B ${s.bb_pctb ?? "-"}</span><br>
+        <span title="당일 거래량 ÷ 최근 20일 평균 거래량. 10배↑=하루 몰림(지속성 확인 필요)">거래량 20일평균 대비 ${s.vol_ratio ?? "-"}배</span> ·
+        <span title="60일 동안 최고점에서 최대로 떨어진 폭. 클수록 변동성이 큼">60일 최대낙폭 ${s.mdd60 ?? "-"}%</span> ·
+        <span title="60거래일 최고가 / 최저가">60일 고가 ${fmt(lv.hi60)} / 저가 ${fmt(lv.lo60)}<br></span><br>
+        <span title="60일 고가~저가 구간에서의 지지·저항선 (피보나치 되돌림). 현재가가 아래 있으면 그 값이 저항">되돌림 0.382 ${fmt(lv.r382)} / 0.5 ${fmt(lv.r500)} / 0.618 ${fmt(lv.r618)}</span><br>${past}</div>
       ${big ? `<div class="chips">큰 변동: ${big}</div>` : ""}
       <div class="why">선택 이유: ${s.reason || "-"}</div>
       ${(s.notes || []).length ? `<ul>${s.notes.map((n) => `<li>${n}</li>`).join("")}</ul>` : ""}
@@ -277,6 +294,27 @@ function renderStars(stars) {
   }).join("")}</div>`;
 
   syncReportLinks();
+}
+
+/* 카드 상단 한 줄 요약 — 지표를 한 문장으로 풀어 쓴다 */
+function verdictLine(s, risk) {
+  const dev = Number(s.dev), rsi = Number(s.rsi);
+  const bits = [];
+  if (Number.isFinite(dev)) {
+    if (dev >= 130) bits.push(`60일 평균보다 ${Math.round(dev - 100)}% 비쌈 → 단기 과열`);
+    else if (dev >= 115) bits.push(`60일 평균보다 ${Math.round(dev - 100)}% 비쌈`);
+    else if (dev <= 70) bits.push(`60일 평균보다 ${Math.round(100 - dev)}% 쌈 → 깊은 하락 구간`);
+    else if (dev <= 85) bits.push(`60일 평균보다 ${Math.round(100 - dev)}% 쌈`);
+    else bits.push("60일 평균 부근");
+  }
+  if (Number.isFinite(rsi)) {
+    if (rsi >= 70) bits.push(`RSI ${s.rsi} 과열(오를 힘 소진)`);
+    else if (rsi <= 30) bits.push(`RSI ${s.rsi} 과매도(팔 만큼 팔림)`);
+  }
+  if (s.past && s.past.n < 10) bits.push(`과거 신호 ${s.past.n}건뿐 — 표본 부족`);
+  if (!bits.length) return "지표상 특이점 없음 — 관찰 상태";
+  const head = risk.cls === "bad" ? "위험:" : risk.cls === "mid" ? "주의:" : "";
+  return (head ? `<b>${head}</b>` : "") + bits.slice(0, 3).join(" · ");
 }
 
 /* 오늘의 후병 표 <-> 리포트 교찰 링크 */

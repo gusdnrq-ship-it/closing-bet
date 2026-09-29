@@ -29,7 +29,7 @@ def say(text: str) -> None:
         print(text.encode(enc, errors="replace").decode(enc))
 
 STRAT_KO = {"breakout": "신고가 돌파", "ssanggul_bollinger": "쌍굴파기", "bnf_oversold": "BNF 역반등"}
-STATE_KO = {"PENDING": "진입대기", "LIVE": "보유", "TP": "익절", "SL": "손절"}
+STATE_KO = {"PENDING": "진입대기", "LIVE": "보유", "TP": "목표도달", "SL": "손절선도달"}
 
 
 def _load(name: str) -> dict:

@@ -132,6 +132,20 @@ a:hover { text-decoration: underline; }
   border-radius: 10px; padding: 10px 14px; margin: 10px 0 4px; white-space: normal;
 }
 .howto b { color: var(--down); }
+.legend {
+  font-size: 11.5px; line-height: 1.8; color: var(--muted);
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 8px 14px; margin: 6px 0 14px; white-space: normal;
+}
+.legend b { color: var(--text); }
+.legend .lg {
+  display: inline-block; margin-right: 16px;
+  padding-left: 14px; position: relative;
+}
+.legend .lg::before {
+  content: ""; position: absolute; left: 0; top: 8px;
+  width: 7px; height: 7px; border-radius: 2px; background: var(--accent); opacity: .7;
+}
 details.fold { margin-top: 8px; }
 details.fold > summary {
   cursor: pointer; font-size: 12px; color: var(--muted);
@@ -153,6 +167,22 @@ details.fold > .card, details.fold > .note { margin-top: 8px; }
 .r-bad { color: var(--miss); background: rgba(224,87,91,.12); }
 .r-mid { color: var(--accent); background: rgba(240,180,41,.12); }
 .r-ok  { color: var(--hit);  background: rgba(55,201,120,.10); }
+
+/* 카드 상단 한 줄 요약 */
+.verdict {
+  font-size: 12.5px; line-height: 1.5; font-weight: 600;
+  margin-top: 6px; padding: 5px 8px; border-radius: 6px;
+  background: var(--panel); border-left: 3px solid var(--line); white-space: normal;
+}
+.verdict.v-bad { border-left-color: var(--miss); background: rgba(224,87,91,.07); }
+.verdict.v-mid { border-left-color: var(--accent); background: rgba(240,180,41,.07); }
+.verdict.v-ok  { border-left-color: var(--hit);  background: rgba(55,201,120,.06); }
+.verdict b { color: inherit; }
+
+/* 지표 마우스 올리면 뜨는 풀이 (title 대비 시각 힌트) */
+.star-card .m span[title] { border-bottom: 1px dotted var(--muted); cursor: help; }
+.star-card .m span[title]:hover { color: var(--text); border-bottom-color: var(--accent); }
+th[title], td[title], .risk[title] { cursor: help; }
 .risk-why {
   margin-top: 8px; font-size: 11px; color: var(--miss); line-height: 1.5;
   background: rgba(224,87,91,.08); border-left: 2px solid var(--miss);
