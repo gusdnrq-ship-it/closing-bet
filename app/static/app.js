@@ -501,7 +501,7 @@ async function runScan() {
     const r = await api("api/scan", { method: "POST" });
     if (!r.ok) throw new Error(r.error || "스캔 실패");
     btn.textContent = `신규 ${r.new_signals}건 · 판정 ${r.settled.HIT + r.settled.MISS}건`;
-    await Promise.all([loadStatus(), loadToday(), loadReport(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults(), loadAdvice()]);
+    await Promise.all([loadStatus(), loadToday(), loadReport(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults(), loadAdvice(), loadLearn()]);
     setTimeout(() => { btn.textContent = "스캔 실행"; }, 4000);
   } catch (e) {
     const webOnly = /→ (404|405)$/.test(String(e.message));
@@ -669,6 +669,53 @@ async function loadAdvice() {
   renderSizer();
   renderOrders();
   notifyBuyChanges();
+}
+
+const GATE_KO = { "통과": "통과", "미달": "미달", "조건부": "조건부", "표본부족": "표본부족", "관망": "관망", "판정없음": "판정없음" };
+
+async function loadLearn() {
+  let L;
+  try { L = await staticApi("learn"); } catch (e) { L = null; }
+  const el = $("#learnNote");
+  if (!el) return;
+  if (!L || !L.strategies || !Object.keys(L.strategies).length) {
+    el.innerHTML = "발전형 게이트: 아직 데이터가 없습니다.";
+    return;
+  }
+  const keys = Object.keys(L.strategies).sort((a, b) =>
+    (L.strategies[b].live_n || 0) - (L.strategies[a].live_n || 0));
+  const chips = keys.map((k) => {
+    const v = L.strategies[k], p = v.posterior || {};
+    const cls = v.applied === "통과" ? "ad-buy" : v.applied === "미달" ? "ad-skip" : "ad-watch";
+    const chg = v.changed
+      ? ` <span class="tag">▲ 자동${v.applied === "통과" ? "승격" : "강등"}</span>` : "";
+    return `<div class="gate-row">
+      <span class="${cls}"><b>${GATE_KO[v.applied] || v.applied}</b></span>
+      <b>${STRAT_KO[k] || k}</b>
+      <span class="tag">실전 ${v.live_rate != null ? v.live_rate + "%" : "-"} (n=${v.live_n})</span>
+      <span class="tag">사후 ${p.mean}% · 95% ${p.ci}</span>${chg}
+      <div class="gate-detail">${v.detail || ""}</div>
+    </div>`;
+  }).join("");
+
+  const hist = (L.history || []);
+  let histHtml = "";
+  if (hist.length > 1) {
+    const rows = hist.slice(-8).reverse().map((h) => {
+      const cells = Object.keys(h.strategies || {}).map((k) => {
+        const s = h.strategies[k];
+        return `${STRAT_KO[k] || k}: ${s.mean}% [${s.ci}] ${s.applied}${s.changed ? "*" : ""}`;
+      }).join(" · ");
+      return `<tr><td>${h.date || "-"}</td><td>${cells}</td></tr>`;
+    }).join("");
+    histHtml = `<details class="fold"><summary>게이트 갱신 이력 (${hist.length}회)</summary>
+      <table><thead><tr><th>갱신일</th><th>사후 추정 (기준선 ${L.baseline}%)</th></tr></thead>
+      <tbody>${rows}</tbody></table></details>`;
+  }
+
+  el.innerHTML = `<b>발전형 게이트</b> — 백테스트(사전) + 실전 판정(관측) → 베이지안 사후.
+    95% 구간이 기준선(${L.baseline}%)을 <b>확실히</b> 넘거나 미칠 때만 판정이 바뀝니다.
+    <div class="gate-list">${chips}</div>${histHtml}`;
 }
 
 function sizerQty(cap, entry, stop, rules) {
@@ -920,5 +967,5 @@ function initTabs() {
   initTabs();
   updateNotifyState();
   renderJournal();
-  await Promise.all([loadStatus(), loadToday(), loadReport(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults(), loadAdvice()]);
+  await Promise.all([loadStatus(), loadToday(), loadReport(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults(), loadAdvice(), loadLearn()]);
 })();

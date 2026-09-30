@@ -51,6 +51,12 @@ def compose() -> str:
 
     # 실전 자문 — 매수 배지를 최우선으로 알린다
     aitems = adv.get("items") or []
+    gates = adv.get("gates") or {}
+    changed = {k: v for k, v in gates.items() if v.get("changed")}
+    if changed:
+        lines.append("**게이트 자동 갱신(발전형)**:")
+        for k, v in changed.items():
+            lines.append(f"• {k}: {v.get('applied')} — {v.get('detail', '')[:80]}")
     if aitems:
         buys = [i for i in aitems if i.get("action") == "BUY"]
         watch = [i for i in aitems if i.get("action") == "WATCH"]

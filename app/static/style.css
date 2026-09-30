@@ -345,3 +345,10 @@ tr.hold-row td {
   background: var(--panel2); color: var(--dim); font-size: 12px;
   padding: 5px 10px 7px; border-top: 0;
 }
+.gate-list { margin: 8px 0 2px; display: flex; flex-direction: column; gap: 7px; }
+.gate-row {
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 10px; font-size: 13px; line-height: 1.5;
+}
+.gate-row .gate-detail { color: var(--dim); font-size: 12px; margin-top: 3px; }
+.gate-row .tag { margin-left: 4px; }

@@ -92,29 +92,56 @@ def _levels(conn, code: str, signal_date: str, sell_by: dict) -> tuple[float | N
         return stop, target
 
 
-def _gate(it: dict) -> dict:
-    g = dict(GATE.get(it["strategy"], {"val": None, "n": 0, "state": "미달",
-                                       "detail": "검증된 전략이 아님"}))
-    if it["strategy"] == "breakout":
-        cond_ok = all([
-            it.get("dist_high") is not None and it["dist_high"] >= COND["dist_high"],
-            it.get("money5") is not None and it["money5"] >= COND["money5"],
-            it.get("rsi") is not None and it["rsi"] >= COND["rsi"],
-        ])
-        if cond_ok:
-            g.update(state="조건부", val=COND["val"], n=COND["n"],
-                     detail=f"3조건 충족(돌파폭≥{COND['dist_high']:.0f}% & 대금≥100억 & "
-                            f"RSI≥{COND['rsi']:.0f}%) → 검증 {COND['val']}% (n={COND['n']:,})")
+def _gate(it: dict, gates: dict | None = None) -> dict:
+    """전략 게이트 — 발전형(learn) 결과가 있으면 적용 판정을, 없으면 백테스트 고정값을 쓴다."""
+    L = ((gates or {}).get("strategies") or {}).get(it["strategy"])
+    static = dict(GATE.get(it["strategy"], {"val": None, "n": 0, "state": "미달",
+                                            "detail": "검증된 전략이 아님"}))
+    applied = L["applied"] if L else static["state"]
+    learned_state = L["learned"] if L else "판정없음"
+    detail = L["detail"] if L else static["detail"]
+
+    if it["strategy"] != "breakout":
+        static["state"], static["detail"] = applied, detail
+        return static
+
+    cond_ok = all([
+        it.get("dist_high") is not None and it["dist_high"] >= COND["dist_high"],
+        it.get("money5") is not None and it["money5"] >= COND["money5"],
+        it.get("rsi") is not None and it["rsi"] >= COND["rsi"],
+    ])
+    miss = []
+    if it.get("dist_high") is None or it["dist_high"] < COND["dist_high"]:
+        miss.append(f"돌파폭 {COND['dist_high']:.0f}%↑")
+    if it.get("money5") is None or it["money5"] < COND["money5"]:
+        miss.append("5일대금 100억↑")
+    if it.get("rsi") is None or it["rsi"] < COND["rsi"]:
+        miss.append(f"RSI {COND['rsi']:.0f}↑")
+
+    if learned_state == "미달":
+        # 실전이 기준선 미달로 확정 → 3조건 예외도 보류
+        static["state"], static["detail"] = "미달", detail + " — 조건부 예외도 보류"
+        return static
+    if cond_ok:
+        if learned_state == "통과":
+            static["state"] = "통과"
+            static["detail"] = (f"{detail} · 3조건 충족(돌파폭≥{COND['dist_high']:.0f}% & "
+                                f"대금≥100억 & RSI≥{COND['rsi']:.0f}%)")
         else:
-            missing = []
-            if it.get("dist_high") is None or it["dist_high"] < COND["dist_high"]:
-                missing.append(f"돌파폭 {COND['dist_high']:.0f}%↑")
-            if it.get("money5") is None or it["money5"] < COND["money5"]:
-                missing.append("5일대금 100억↑")
-            if it.get("rsi") is None or it["rsi"] < COND["rsi"]:
-                missing.append(f"RSI {COND['rsi']:.0f}↑")
-            g["detail"] = f"조건부 허용 조건 미충족 ({', '.join(missing)}) — {g['detail']}"
-    return g
+            static["state"] = "조건부"
+            static["val"], static["n"] = COND["val"], COND["n"]
+            static["detail"] = (f"3조건 충족(돌파폭≥{COND['dist_high']:.0f}% & 대금≥100억 & "
+                                f"RSI≥{COND['rsi']:.0f}%) → 검증 {COND['val']}% (n={COND['n']:,})"
+                                + (f" · {detail}" if L else ""))
+        return static
+
+    if learned_state == "통과":
+        static["state"], static["detail"] = "통과", detail
+        return static
+    static["state"] = "미달"
+    static["detail"] = (f"조건부 허용 조건 미충족 ({', '.join(miss)}) — {static['detail']}"
+                        if miss else static["detail"])
+    return static
 
 
 def _decide(it: dict, risk: dict, gate: dict, stop, target,
@@ -129,6 +156,8 @@ def _decide(it: dict, risk: dict, gate: dict, stop, target,
         return "SKIP", [gate["detail"]]
     if gate["state"] == "표본부족":
         return "SKIP", [gate["detail"]]
+    if gate["state"] == "관망":
+        return "WATCH", [gate["detail"]]
 
     reasons.append(gate["detail"])
     if risk["cls"] == "mid":
@@ -158,7 +187,7 @@ def _decide(it: dict, risk: dict, gate: dict, stop, target,
     return "BUY", reasons
 
 
-def build(conn, today: dict, rep: dict | None, sell: dict) -> dict:
+def build(conn, today: dict, rep: dict | None, sell: dict, gates: dict | None = None) -> dict:
     items_in = (today or {}).get("items") or []
     sell_by = {(s["code"], s["signal_date"]): s for s in (sell.get("items") or [])}
     risk_by = {}
@@ -170,7 +199,7 @@ def build(conn, today: dict, rep: dict | None, sell: dict) -> dict:
     for it in items_in:
         row = risk_by.get(it["code"]) or _light_risk(it)
         risk = row["risk"] if "risk" in row else row
-        gate = _gate(it)
+        gate = _gate(it, gates)
         stop, target = _levels(conn, it["code"], it["signal_date"], sell_by)
 
         entry = it.get("entry_close")

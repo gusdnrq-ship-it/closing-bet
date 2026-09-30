@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 import config
-from app import advice, db, report, scoreboard, sell_timing, timeline, verification
+from app import advice, db, learn, report, scoreboard, sell_timing, timeline, verification
 
 API_DIR = config.BASE_DIR / "app" / "static" / "api"
 
@@ -71,7 +71,25 @@ def export_api(conn=None) -> dict:
 
         # 실전 자문: 매수/관망/제외 + 손절·목표 (today.json에 주입)
         try:
-            adv = advice.build(conn, today, rep, sell)
+            try:
+                prev_hist = json.loads(db.get_meta(conn, "learn_history") or "[]")
+            except Exception:
+                prev_hist = []
+            learned = learn.build(conn, advice.GATE)
+            learned["date"] = status["exported"]
+            learned["history"] = learn.append_history({"history": prev_hist},
+                                                      learn.snapshot(learned))
+            # 이력은 DB(meta)에 보관 — site/는 매 런마다 새로 만들어져 JSON에 남지 않음
+            db.set_meta(conn, "learn_history",
+                        json.dumps(learned["history"], ensure_ascii=False))
+            _write("learn.json", learned)
+
+            adv = advice.build(conn, today, rep, sell, learned)
+            adv["gates"] = {k: {"applied": v["applied"], "learned": v["learned"],
+                                "changed": v["changed"], "detail": v["detail"],
+                                "live_n": v["live_n"], "live_rate": v["live_rate"],
+                                "posterior": v["posterior"]}
+                            for k, v in learned["strategies"].items()}
             _write("advice.json", adv)
             _write("orders.json", advice.size_orders(adv))
             act = {i["code"]: i for i in adv["items"]}
