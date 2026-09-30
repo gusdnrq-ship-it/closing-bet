@@ -33,6 +33,14 @@ GATE = {
 COND = {"dist_high": 10.0, "money5": 10_000_000_000, "rsi": 80.0,
         "val": 51.3, "n": 2_040}
 
+# 신뢰도 배율 — 게이트 사후 상태에 따라 사이즈를 키우거나 줄인다.
+# 1회 리스크 1%는 절대 상한(더 키우지 않는다), 종목 한도는 배율만큼 변동한다.
+CONF = {
+    "decisive": 1.25,   # 95% 구간 하단이 기준선 초과 → 한도 20% → 25%
+    "base": 1.00,       # 기본
+    "weak": 0.90,       # 조건부 허용·표본부족 승격 등 근거가 약함 → 리스크 0.9% · 한도 18%
+}
+
 ACTION_KO = {"BUY": "매수", "WATCH": "관망", "SKIP": "제외"}
 ACTION_CLS = {"BUY": "ad-buy", "WATCH": "ad-watch", "SKIP": "ad-skip"}
 
@@ -144,6 +152,37 @@ def _gate(it: dict, gates: dict | None = None) -> dict:
     return static
 
 
+def confidence(gates: dict | None, strategy: str, gate_state: str,
+               gate_val: float | None = None) -> tuple[float, str]:
+    """게이트 사후 상태 → 사이즈 배율과 근거 한 줄.
+
+    절대 규칙: 배율이 1을 넘어도 1회 리스크는 자본의 1%를 넘기지 않는다.
+    배율은 종목 한도(20%)에만 반영한다.
+    """
+    g = ((gates or {}).get("strategies") or {}).get(strategy) or {}
+    post = g.get("posterior") or {}
+    learned, applied = g.get("learned"), g.get("applied")
+    mean, ci = post.get("mean"), post.get("ci")
+
+    if learned == "통과" and applied == "통과":
+        if strategy == "ssanggul_bollinger":
+            # 백테스트가 표본 부족이던 전략 — 실전이 승격시켜도 절반(0.9)만 인정한다
+            return CONF["weak"], (f"표본부족 전략 실전 승격(사후 {mean}%) — "
+                                  f"리스크 {config.TRADE_RISK_PCT * CONF['weak']:.1f}% · "
+                                  f"한도 {config.MAX_POS_PCT * CONF['weak']:.0f}%")
+        return CONF["decisive"], (f"사후 확정 통과 (사후 {mean}%, 95% {ci} > 기준선 {BASELINE}%) "
+                                  f"— 한도 {config.MAX_POS_PCT * CONF['decisive']:.0f}%")
+    if gate_state == "조건부":
+        return CONF["weak"], (f"조건부 허용(검증 {COND['val']}%, 실전 미확정) — "
+                              f"리스크 {config.TRADE_RISK_PCT * CONF['weak']:.1f}% · "
+                              f"한도 {config.MAX_POS_PCT * CONF['weak']:.0f}%")
+    if applied == "통과" or gate_state == "통과":
+        return CONF["base"], (f"백테스트 통과 유지 (사후 {mean}% 95% {ci} — 기준선 포함) — "
+                              f"기본 사이즈 (리스크 {config.TRADE_RISK_PCT:.1f}% · "
+                              f"한도 {config.MAX_POS_PCT:.0f}%)")
+    return CONF["base"], "기본 사이즈"
+
+
 def _decide(it: dict, risk: dict, gate: dict, stop, target,
             risk_pct: float | None = None, r_mult: float | None = None) -> tuple[str, list[str]]:
     reasons: list[str] = []
@@ -211,6 +250,9 @@ def build(conn, today: dict, rep: dict | None, sell: dict, gates: dict | None = 
             r_mult = round((target - entry) / (entry - stop), 2)
 
         action, reasons = _decide(it, risk, gate, stop, target, risk_pct, r_mult)
+        conf_mult, conf_note = confidence(gates, it["strategy"], gate["state"])
+        if action == "BUY" and conf_mult != 1:
+            reasons.append(f"게이트 신뢰도 ×{conf_mult} — {conf_note}")
 
         out.append({
             "code": it["code"], "name": it.get("name"),
@@ -221,6 +263,7 @@ def build(conn, today: dict, rep: dict | None, sell: dict, gates: dict | None = 
             "dist_high": it.get("dist_high"),
             "action": action, "action_ko": ACTION_KO[action],
             "reasons": reasons, "gate": gate,
+            "conf_mult": conf_mult, "conf_note": conf_note,
             "risk_label": risk.get("label"), "risk_cls": risk.get("cls"),
             "risk_why": risk.get("why", []),
             "stop": stop, "target": target,
@@ -245,14 +288,17 @@ def build(conn, today: dict, rep: dict | None, sell: dict, gates: dict | None = 
 def size_orders(adv: dict, capital: int | None = None) -> dict:
     """자본금 기준 주문 시트 — 1주 단위.
 
-    종목당 한도(20%)와 1회 리스크 한도(1%) 중 작은 쪽,
-    그리고 총 매수 한도(60%)를 ★ 선택순서(선정→순위)대로 순차 적용한다.
-    총 한도에 닿으면 나머지 매수 후보는 '대기'로 남긴다(즉시 매수 아님).
+    종목당 한도와 1회 리스크 한도 중 작은 쪽, 그리고 총 매수 한도(60%)를
+    ★ 선택순서(선정→순위)대로 순차 적용한다. 총 한도에 닿으면 나머지 매수 후보는
+    '대기'로 남긴다(즉시 매수 아님).
+
+    신뢰도 배율(`conf_mult`)이 있으면 종목 한도는 그만큼 변동(20% → 25%/18%)하고,
+    **1회 리스크는 절대 1%를 넘지 않는다**(약한 근거는 0.9%로 줄기만 한다).
     """
     cap = capital or config.DEFAULT_CAPITAL
-    max_pos = cap * config.MAX_POS_PCT / 100
+    max_pos_base = cap * config.MAX_POS_PCT / 100
     max_total = cap * config.MAX_TOTAL_PCT / 100
-    risk_budget = cap * config.TRADE_RISK_PCT / 100
+    risk_base = cap * config.TRADE_RISK_PCT / 100
     orders = []
     used = 0.0
     cands = [i for i in (adv.get("items") or [])
@@ -263,8 +309,11 @@ def size_orders(adv: dict, capital: int | None = None) -> dict:
     for it in cands:
         entry = float(it["entry"])
         stop = it.get("stop")
+        m = float(it.get("conf_mult") or 1)
+        risk_budget = risk_base * min(m, 1.0)   # 1% 상한 유지
+        max_pos = max_pos_base * m
         if not stop or entry <= stop:
-            orders.append({**_order_row(it, entry, 0, cap),
+            orders.append({**_order_row(it, entry, 0, cap, m, risk_budget, max_pos),
                            "note": "손절선이 진입가 이상 — 매수 불가"})
             continue
         by_risk = int(risk_budget // (entry - stop))
@@ -273,11 +322,15 @@ def size_orders(adv: dict, capital: int | None = None) -> dict:
         qty = max(0, min(by_risk, by_cap, by_total))
         if qty <= 0:
             reason = ("총 매수 한도(" + f"{config.MAX_TOTAL_PCT:.0f}%" + ") 도달 — 대기"
-                      if by_total <= 0 else "1회 리스크·종목 한도로는 매수 불가")
-            orders.append({**_order_row(it, entry, 0, cap), "note": reason})
+                      if by_total <= 0 else
+                      (f"신뢰도 ×{m} 적용 한도(리스크 {risk_budget:,.0f}원 / "
+                       f"종목 {max_pos:,.0f}원)로는 매수 불가"
+                       if m != 1 else "1회 리스크·종목 한도로는 매수 불가"))
+            orders.append({**_order_row(it, entry, 0, cap, m, risk_budget, max_pos),
+                           "note": reason})
             continue
         used += entry * qty
-        orders.append(_order_row(it, entry, qty, cap))
+        orders.append(_order_row(it, entry, qty, cap, m, risk_budget, max_pos))
     return {
         "date": adv.get("date"),
         "capital": cap,
@@ -290,7 +343,9 @@ def size_orders(adv: dict, capital: int | None = None) -> dict:
     }
 
 
-def _order_row(it: dict, entry: float, qty: int, cap: int) -> dict:
+def _order_row(it: dict, entry: float, qty: int, cap: int,
+               conf_mult: float = 1.0, risk_budget: float = 0,
+               max_pos: float = 0) -> dict:
     return {
         "code": it["code"], "name": it["name"], "strategy": it["strategy"],
         "side": "BUY", "qty": qty,
@@ -300,5 +355,7 @@ def _order_row(it: dict, entry: float, qty: int, cap: int) -> dict:
         "invested_pct": round(entry * qty / cap * 100, 1) if cap else None,
         "max_loss": round((entry - it["stop"]) * qty) if it.get("stop") and qty else None,
         "signal_date": it.get("signal_date"),
+        "conf_mult": conf_mult, "conf_note": it.get("conf_note"),
+        "risk_budget": round(risk_budget), "max_pos": round(max_pos),
         "note": it["reasons"][0] if it.get("reasons") else "",
     }

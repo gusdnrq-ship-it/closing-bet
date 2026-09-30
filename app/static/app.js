@@ -738,6 +738,7 @@ function renderSizer() {
     `총 한도 <b>${fmt(Math.round(cap * rules.max_total_pct / 100))}원</b>`;
 
   // 서버 size_orders와 동일 규칙: ★ 선정 → 순위 순으로 1회 리스크(1%) / 종목당(20%) / 총(60%) 한도 순차 적용
+  // 신뢰도 배율(conf_mult)이 있으면 종목 한도만 변동, 1회 리스크는 절대 1%를 넘지 않는다.
   const buys = (ADV.items || []).filter((i) => i.action === "BUY" && i.entry)
     .sort((a, b) => (a.selected === b.selected ? (a.rank || 99) - (b.rank || 99) : (a.selected ? -1 : 1)));
   if (!buys.length) {
@@ -748,27 +749,32 @@ function renderSizer() {
   const maxTotal = cap * rules.max_total_pct / 100;
   let used = 0;
   const calc = buys.map((i) => {
+    const m = Number(i.conf_mult) || 1;
+    const riskPct = rules.risk_pct * Math.min(m, 1);
+    const posPct = rules.max_pos_pct * m;
     let qty = 0, by = "총 한도";
-    const byCap = Math.floor((cap * rules.max_pos_pct / 100) / i.entry);
+    const byCap = Math.floor((cap * posPct / 100) / i.entry);
     const valid = i.stop && i.entry > i.stop;
     if (valid) {
-      const byRisk = Math.floor((cap * rules.risk_pct / 100) / (i.entry - i.stop));
+      const byRisk = Math.floor((cap * riskPct / 100) / (i.entry - i.stop));
       const byTotal = Math.floor((maxTotal - used) / i.entry);
       qty = Math.max(0, Math.min(byRisk, byCap, byTotal));
-      by = qty > 0 ? (byRisk <= byCap ? "1회 리스크" : "종목당 한도") : "총 한도";
+      by = qty > 0 ? (byRisk <= byCap ? `1회 리스크 ${riskPct.toFixed(1)}%` : `종목 한도 ${posPct.toFixed(0)}%`) : "총 한도";
     }
     if (qty <= 0) by = valid ? by : "손절 오류";
     if (qty > 0) used += qty * i.entry;
-    return { i, qty, by };
+    return { i, qty, by, m };
   });
   $("#sizerOut").className = "card table-wrap";
   $("#sizerOut").innerHTML = `<table><thead><tr>
     <th>종목</th><th>진입가</th><th>손절가</th><th>수량</th><th>투자금</th><th>비중</th><th>손절 시 손실</th><th>결정 한도</th>
-    </tr></thead><tbody>${calc.map(({ i, qty, by }) => {
+    </tr></thead><tbody>${calc.map(({ i, qty, by, m }) => {
       const inv = qty * i.entry;
       const loss = i.stop && i.entry > i.stop ? (i.entry - i.stop) * qty : null;
+      const confTag = m !== 1
+        ? ` <span class="tag ${m > 1 ? "ad-buy" : ""}">×${m}</span>` : "";
       return `<tr>
-        <td><b>${i.name || i.code}</b> <span class="tag">${i.code}</span></td>
+        <td><b>${i.name || i.code}</b> <span class="tag">${i.code}</span>${confTag}</td>
         <td>${fmt(i.entry)}</td>
         <td>${i.stop ? fmt(i.stop) : "-"}</td>
         <td>${qty ? `<b>${fmt(qty)}주</b>` : `<span class="ad-skip">대기</span>`}</td>
@@ -779,7 +785,8 @@ function renderSizer() {
       </tr>`;
     }).join("")}</tbody></table>
     <div class="note">총 매수 예정액 <b>${fmt(Math.round(used))}원</b> (총 한도 ${fmt(Math.round(maxTotal))}원,
-      ${(used / cap * 100).toFixed(1)}% 사용) · 동시 보유 최대 3종목 — 한도를 넘는 종목은 '대기'로 남습니다.</div>`;
+      ${(used / cap * 100).toFixed(1)}% 사용) · 동시 보유 최대 3종목 — 한도를 넘는 종목은 '대기'로 남습니다.
+      · 게이트 신뢰도 배율 ×0.9~1.25 적용(종목 한도만 변동, 1회 리스크는 절대 1%를 넘지 않음).</div>`;
 }
 
 function renderOrders() {
@@ -793,14 +800,18 @@ function renderOrders() {
   const hold = rows.filter((r) => !r.qty);
   const head = ORD.used != null
     ? `<div class="note">총 매수 예정액 <b>${fmt(ORD.used)}원</b> / 한도 ${fmt(ORD.max_total)}원
-       (${ORD.used_pct}% 사용) — 실행 <b>${live.length}건</b>, 대기 ${hold.length}건</div>`
+       (${ORD.used_pct}% 사용) — 실행 <b>${live.length}건</b>, 대기 ${hold.length}건
+       · 신뢰도 배율이 1이 아닌 주문은 종목명 옆에 표시 (리스크 1% 상한 유지)</div>`
     : "";
   $("#orders").className = "card table-wrap";
   $("#orders").innerHTML = head + `<table><thead><tr>
     <th>종목</th><th>매수</th><th>수량</th><th>지정가</th><th>손절</th><th>목표</th><th>최대 손실</th><th>비중</th>
     </tr></thead><tbody>${rows.map((o) => `
     <tr>
-      <td><b>${o.name || o.code}</b> <span class="tag">${o.code} · ${o.signal_date}</span></td>
+      <td><b>${o.name || o.code}</b> <span class="tag">${o.code} · ${o.signal_date}</span>${
+        o.conf_mult && o.conf_mult !== 1
+          ? ` <span class="tag ${o.conf_mult > 1 ? "ad-buy" : ""}" title="${o.conf_note || ""}">×${o.conf_mult}</span>`
+          : ""}</td>
       <td>${STRAT_KO[o.strategy] || o.strategy}</td>
       <td>${o.qty ? `<b>${fmt(o.qty)}주</b>` : `<span class="ad-skip">대기</span>`}</td>
       <td>${fmt(o.limit_price)}</td>
@@ -828,9 +839,11 @@ function exportOrdersCSV() {
   if (!rows.length) { alert("다운로드할 주문이 없습니다."); return; }
   downloadCSV(`orders_${(ORD.date || "unknown").replace(/-/g, "")}.csv`,
     ["date", "code", "name", "strategy", "side", "qty", "price_type", "limit_price",
-     "stop", "target", "max_loss", "signal_date", "note"],
+     "stop", "target", "max_loss", "conf_mult", "risk_budget", "max_pos",
+     "signal_date", "note"],
     rows.map((o) => [ORD.date, o.code, o.name, o.strategy, o.side, o.qty, o.price_type,
-      o.limit_price, o.stop, o.target, o.max_loss, o.signal_date, o.note]));
+      o.limit_price, o.stop, o.target, o.max_loss, o.conf_mult, o.risk_budget, o.max_pos,
+      o.signal_date, o.note]));
 }
 
 /* 매매일지 — 브라우저 localStorage (서버에 안 보냄) */
