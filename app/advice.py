@@ -128,9 +128,15 @@ def _decide(it: dict, risk: dict, gate: dict, stop, target,
     if risk["cls"] == "mid":
         reasons.append(f"주의: {', '.join(risk['why'])} — 손절선 엄수")
 
+    if not it.get("entry_close"):
+        return "WATCH", reasons + ["진입가(신호 다음 거래일 시가) 미확정 — 장 시작 후 확인"]
     if stop is None or target is None:
         return "WATCH", reasons + ["손절선·목표가 산출 불가 — 데이터 확인 후 판단"]
-    if target <= it.get("entry_close", 0):
+    if stop >= it["entry_close"]:
+        return "SKIP", reasons + [
+            f"손절선 {stop:,.0f}이 진입가 {it['entry_close']:,.0f} 이상 — "
+            "진입 즉시 손절 조건 (최근 저점을 이미 하회)"]
+    if target <= it["entry_close"]:
         return "WATCH", reasons + [
             f"목표(60일선) {target:,.0f}가 진입가 {it['entry_close']:,.0f} 이하 — "
             "즉시 목표 도달하면 손실. 시간 매도(20거래일)만 남음"]
@@ -202,25 +208,47 @@ def build(conn, today: dict, rep: dict | None, sell: dict) -> dict:
 
 
 def size_orders(adv: dict, capital: int | None = None) -> dict:
-    """자본금 기준 주문 시트 — 1주 단위, 종목당 한도와 1회 리스크 한도 중 작은 쪽."""
+    """자본금 기준 주문 시트 — 1주 단위.
+
+    종목당 한도(20%)와 1회 리스크 한도(1%) 중 작은 쪽,
+    그리고 총 매수 한도(60%)를 ★ 선택순서(선정→순위)대로 순차 적용한다.
+    총 한도에 닿으면 나머지 매수 후보는 '대기'로 남긴다(즉시 매수 아님).
+    """
     cap = capital or config.DEFAULT_CAPITAL
     max_pos = cap * config.MAX_POS_PCT / 100
+    max_total = cap * config.MAX_TOTAL_PCT / 100
     risk_budget = cap * config.TRADE_RISK_PCT / 100
     orders = []
-    for it in adv.get("items") or []:
-        if it["action"] != "BUY" or not it.get("entry"):
-            continue
+    used = 0.0
+    cands = [i for i in (adv.get("items") or [])
+             if i["action"] == "BUY" and i.get("entry")]
+    # ★ 선택(선정) 종목 → 순위 순으로 배분
+    cands.sort(key=lambda i: (0 if i.get("selected") else 1,
+                              i.get("rank") or 99, i["code"]))
+    for it in cands:
         entry = float(it["entry"])
-        by_risk = int(risk_budget // (entry - it["stop"])) if it.get("stop") and entry > it["stop"] else 0
-        by_cap = int(max_pos // entry)
-        qty = max(0, min(by_risk, by_cap))
-        if qty <= 0:
-            orders.append({**_order_row(it, entry, 0, cap), "note": "1회 리스크·한도로는 매수 불가"})
+        stop = it.get("stop")
+        if not stop or entry <= stop:
+            orders.append({**_order_row(it, entry, 0, cap),
+                           "note": "손절선이 진입가 이상 — 매수 불가"})
             continue
+        by_risk = int(risk_budget // (entry - stop))
+        by_cap = int(max_pos // entry)
+        by_total = int((max_total - used) // entry)
+        qty = max(0, min(by_risk, by_cap, by_total))
+        if qty <= 0:
+            reason = ("총 매수 한도(" + f"{config.MAX_TOTAL_PCT:.0f}%" + ") 도달 — 대기"
+                      if by_total <= 0 else "1회 리스크·종목 한도로는 매수 불가")
+            orders.append({**_order_row(it, entry, 0, cap), "note": reason})
+            continue
+        used += entry * qty
         orders.append(_order_row(it, entry, qty, cap))
     return {
         "date": adv.get("date"),
         "capital": cap,
+        "max_total": max_total,
+        "used": round(used),
+        "used_pct": round(used / cap * 100, 1) if cap else None,
         "rules": adv.get("rules") or RULES,
         "orders": orders,
         "caveats": CAVEATS,

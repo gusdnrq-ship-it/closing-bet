@@ -640,11 +640,11 @@ async function loadAdvice() {
   ] : []).join("<br>") + (ADV.caveats || []).map((c) => `<br>⚠ ${c}`).join("");
 
   const order = { BUY: 0, WATCH: 1, SKIP: 2 };
-  const items = [...(ADV.items || [])].sort((a, b) => order[a.action] - order[b.action]);
-  $("#advice").className = "card table-wrap";
-  $("#advice").innerHTML = `<table><thead><tr>
-    <th>자문</th><th>종목 / 전략</th><th>진입</th><th>손절</th><th>목표</th><th>근거</th>
-    </tr></thead><tbody>${items.map((i) => `
+  const sorted = [...(ADV.items || [])].sort((a, b) =>
+    order[a.action] - order[b.action] || (a.selected === b.selected ? 0 : (a.selected ? -1 : 1)));
+  const active = sorted.filter((i) => i.action !== "SKIP");
+  const skipped = sorted.filter((i) => i.action === "SKIP");
+  const tr = (i) => `
     <tr>
       <td class="${ADVICE_CLS[i.action]}"><b>${i.action_ko}</b></td>
       <td><b>${i.name || i.code}</b> <span class="tag">${i.code} · ${STRAT_KO[i.strategy] || i.strategy}
@@ -653,7 +653,19 @@ async function loadAdvice() {
       <td>${i.stop ? fmt(i.stop) + (i.risk_pct ? ` <span class="tag">(−${i.risk_pct}%)</span>` : "") : "-"}</td>
       <td>${i.target ? fmt(i.target) + (i.r_multiple ? ` <span class="tag">(${i.r_multiple}R)</span>` : "") : "-"}</td>
       <td class="why-cell">${(i.reasons || []).join("<br>")}</td>
-    </tr>`).join("")}</tbody></table>`;
+    </tr>`;
+  const head = `<thead><tr>
+    <th>자문</th><th>종목 / 전략</th><th>진입</th><th>손절</th><th>목표</th><th>근거</th>
+    </tr></thead>`;
+  let html = active.length
+    ? `<table>${head}<tbody>${active.map(tr).join("")}</tbody></table>`
+    : `<div class="empty">오늘 관찰할 종목이 없습니다 — 모두 제외</div>`;
+  if (skipped.length) {
+    html += `<details class="fold"><summary>제외 ${skipped.length}종목 보기</summary>
+      <table>${head}<tbody>${skipped.map(tr).join("")}</tbody></table></details>`;
+  }
+  $("#advice").className = "card table-wrap";
+  $("#advice").innerHTML = html;
   renderSizer();
   renderOrders();
   notifyBuyChanges();
@@ -678,34 +690,49 @@ function renderSizer() {
     `종목당 <b>${fmt(Math.round(cap * rules.max_pos_pct / 100))}원</b> · ` +
     `총 한도 <b>${fmt(Math.round(cap * rules.max_total_pct / 100))}원</b>`;
 
-  const buys = (ADV.items || []).filter((i) => i.action === "BUY" && i.entry);
+  // 서버 size_orders와 동일 규칙: ★ 선정 → 순위 순으로 1회 리스크(1%) / 종목당(20%) / 총(60%) 한도 순차 적용
+  const buys = (ADV.items || []).filter((i) => i.action === "BUY" && i.entry)
+    .sort((a, b) => (a.selected === b.selected ? (a.rank || 99) - (b.rank || 99) : (a.selected ? -1 : 1)));
   if (!buys.length) {
     $("#sizerOut").className = "card";
     $("#sizerOut").innerHTML = `<div class="empty">오늘 '매수' 배지 종목이 없습니다 — 사이징할 대상 없음</div>`;
     return;
   }
+  const maxTotal = cap * rules.max_total_pct / 100;
+  let used = 0;
+  const calc = buys.map((i) => {
+    let qty = 0, by = "총 한도";
+    const byCap = Math.floor((cap * rules.max_pos_pct / 100) / i.entry);
+    const valid = i.stop && i.entry > i.stop;
+    if (valid) {
+      const byRisk = Math.floor((cap * rules.risk_pct / 100) / (i.entry - i.stop));
+      const byTotal = Math.floor((maxTotal - used) / i.entry);
+      qty = Math.max(0, Math.min(byRisk, byCap, byTotal));
+      by = qty > 0 ? (byRisk <= byCap ? "1회 리스크" : "종목당 한도") : "총 한도";
+    }
+    if (qty <= 0) by = valid ? by : "손절 오류";
+    if (qty > 0) used += qty * i.entry;
+    return { i, qty, by };
+  });
   $("#sizerOut").className = "card table-wrap";
   $("#sizerOut").innerHTML = `<table><thead><tr>
     <th>종목</th><th>진입가</th><th>손절가</th><th>수량</th><th>투자금</th><th>비중</th><th>손절 시 손실</th><th>결정 한도</th>
-    </tr></thead><tbody>${buys.map((i) => {
-      const { qty, by } = sizerQty(cap, i.entry, i.stop, rules);
+    </tr></thead><tbody>${calc.map(({ i, qty, by }) => {
       const inv = qty * i.entry;
       const loss = i.stop && i.entry > i.stop ? (i.entry - i.stop) * qty : null;
       return `<tr>
         <td><b>${i.name || i.code}</b> <span class="tag">${i.code}</span></td>
         <td>${fmt(i.entry)}</td>
         <td>${i.stop ? fmt(i.stop) : "-"}</td>
-        <td><b>${fmt(qty)}주</b></td>
+        <td>${qty ? `<b>${fmt(qty)}주</b>` : `<span class="ad-skip">대기</span>`}</td>
         <td>${fmt(Math.round(inv))}원</td>
         <td>${inv ? (inv / cap * 100).toFixed(1) : "0"}%</td>
         <td class="dir-DOWN">${loss == null ? "-" : "−" + fmt(Math.round(loss)) + "원"}</td>
         <td class="tag">${by}</td>
       </tr>`;
     }).join("")}</tbody></table>
-    <div class="note">총 매수 예정액 ${fmt(Math.round(buys.reduce((t, i) =>
-      t + sizerQty(cap, i.entry, i.stop, rules).qty * i.entry, 0)))}원
-      (총 한도 ${fmt(Math.round(cap * rules.max_total_pct / 100))}원) ·
-      동시 보유 최대 3종목 — 초과분은 매수하지 않습니다.</div>`;
+    <div class="note">총 매수 예정액 <b>${fmt(Math.round(used))}원</b> (총 한도 ${fmt(Math.round(maxTotal))}원,
+      ${(used / cap * 100).toFixed(1)}% 사용) · 동시 보유 최대 3종목 — 한도를 넘는 종목은 '대기'로 남습니다.</div>`;
 }
 
 function renderOrders() {
@@ -715,20 +742,26 @@ function renderOrders() {
     $("#orders").innerHTML = `<div class="empty">오늘 주문할 '매수' 배지가 없습니다.</div>`;
     return;
   }
+  const live = rows.filter((r) => r.qty > 0);
+  const hold = rows.filter((r) => !r.qty);
+  const head = ORD.used != null
+    ? `<div class="note">총 매수 예정액 <b>${fmt(ORD.used)}원</b> / 한도 ${fmt(ORD.max_total)}원
+       (${ORD.used_pct}% 사용) — 실행 <b>${live.length}건</b>, 대기 ${hold.length}건</div>`
+    : "";
   $("#orders").className = "card table-wrap";
-  $("#orders").innerHTML = `<table><thead><tr>
+  $("#orders").innerHTML = head + `<table><thead><tr>
     <th>종목</th><th>매수</th><th>수량</th><th>지정가</th><th>손절</th><th>목표</th><th>최대 손실</th><th>비중</th>
     </tr></thead><tbody>${rows.map((o) => `
     <tr>
       <td><b>${o.name || o.code}</b> <span class="tag">${o.code} · ${o.signal_date}</span></td>
       <td>${STRAT_KO[o.strategy] || o.strategy}</td>
-      <td><b>${fmt(o.qty)}주</b></td>
+      <td>${o.qty ? `<b>${fmt(o.qty)}주</b>` : `<span class="ad-skip">대기</span>`}</td>
       <td>${fmt(o.limit_price)}</td>
       <td>${o.stop ? fmt(o.stop) : "-"}</td>
       <td>${o.target ? fmt(o.target) : "-"}</td>
       <td class="dir-DOWN">${o.max_loss ? "−" + fmt(o.max_loss) + "원" : "-"}</td>
-      <td>${o.invested_pct != null ? o.invested_pct + "%" : "-"}</td>
-    </tr>`).join("")}</tbody></table>`;
+      <td>${o.invested_pct ? o.invested_pct + "%" : "-"}</td>
+    </tr>${o.qty ? "" : `<tr class="hold-row"><td colspan="8">⏸ ${o.note}</td></tr>`}`).join("")}</tbody></table>`;
 }
 
 function downloadCSV(filename, header, rows) {
