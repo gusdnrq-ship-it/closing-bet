@@ -63,27 +63,33 @@ def _light_risk(row: dict) -> dict:
 
 
 def _levels(conn, code: str, signal_date: str, sell_by: dict) -> tuple[float | None, float | None]:
-    """손절선(신호 이전 60일 최저)과 목표가(60일선) — 매도 추적 데이터 우선 재사용."""
-    s = sell_by.get((code, signal_date))
-    if s:
-        return s.get("stop"), s.get("target")
+    """손절선(신호 이전 60일 최저)과 목표가(60일선) — 매도 추적 데이터를 우선 재사용하되,
+    신규 신호는 매도 추적 대상에 아직 목표가가 비어 있으므로 빈 값만 가격계산으로 채운다."""
+    s = sell_by.get((code, signal_date)) or {}
+    stop, target = s.get("stop"), s.get("target")
+    if stop is not None and target is not None:
+        return stop, target
+    if conn is None:
+        return stop, target
     try:
         df = data.load_df(conn, code, limit=260)
         if df.empty:
-            return None, None
-        d = bnf_oversold._indicators(df)
+            return stop, target
         sig_ts = pd.Timestamp(signal_date)
         if sig_ts not in df.index:
-            return None, None
+            return stop, target
+        d = bnf_oversold._indicators(df)
         i = int(df.index.get_loc(sig_ts))
-        look = d["low"].iloc[max(0, i - config.SELL_STOP_LOOKBACK):i]
-        look = look[look > 0]
-        stop = float(look.min()) if not look.empty else None
-        ma = d["ma"].iloc[i]
-        target = float(ma) if pd.notna(ma) else None
+        if stop is None:
+            look = d["low"].iloc[max(0, i - config.SELL_STOP_LOOKBACK):i]
+            look = look[look > 0]
+            stop = float(look.min()) if not look.empty else None
+        if target is None:
+            ma = d["ma"].iloc[i]
+            target = float(ma) if pd.notna(ma) else None
         return stop, target
     except Exception:
-        return None, None
+        return stop, target
 
 
 def _gate(it: dict) -> dict:
