@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 import config
-from app import db, report, scoreboard, sell_timing, timeline, verification
+from app import advice, db, report, scoreboard, sell_timing, timeline, verification
 
 API_DIR = config.BASE_DIR / "app" / "static" / "api"
 
@@ -60,11 +60,32 @@ def export_api(conn=None) -> dict:
         _write("status.json", status)
         _write("today.json", today)
         _write("verification.json", verif)
+        rep = None
         try:
-            _write("report.json", report.build(conn))
+            rep = report.build(conn)
+            _write("report.json", rep)
         except Exception as e:  # 리포트 실패는 발행 중단 사유가 아니다
             print(f"report.json 생성 실패: {e}")
-        _write("sell.json", sell_timing.build(conn))
+        sell = sell_timing.build(conn)
+        _write("sell.json", sell)
+
+        # 실전 자문: 매수/관망/제외 + 손절·목표 (today.json에 주입)
+        try:
+            adv = advice.build(conn, today, rep, sell)
+            _write("advice.json", adv)
+            _write("orders.json", advice.size_orders(adv))
+            act = {i["code"]: i for i in adv["items"]}
+            for it in today["items"]:
+                a = act.get(it["code"])
+                if a:
+                    it["action"] = a["action"]
+                    it["action_ko"] = a["action_ko"]
+                    it["reasons"] = a["reasons"]
+                    it["stop"] = a["stop"]
+                    it["target"] = a["target"]
+            _write("today.json", today)
+        except Exception as e:
+            print(f"advice.json 생성 실패: {e}")
         _write("results.json", {"items": scoreboard.recent_results(conn, 300)})
         _write("scoreboard.json", scoreboard.scoreboard(conn))
         _write("signals.json", {"items": signals})

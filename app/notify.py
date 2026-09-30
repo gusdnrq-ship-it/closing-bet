@@ -43,10 +43,35 @@ def compose() -> str:
     today = _load("today.json")
     sell = _load("sell.json")
     results = _load("results.json")
+    adv = _load("advice.json")
     items = today.get("items") or []
     date = today.get("date") or "최신"
 
     lines = [f"📊 **종가배팅 {date} 스캔**"]
+
+    # 실전 자문 — 매수 배지를 최우선으로 알린다
+    aitems = adv.get("items") or []
+    if aitems:
+        buys = [i for i in aitems if i.get("action") == "BUY"]
+        watch = [i for i in aitems if i.get("action") == "WATCH"]
+        s = adv.get("summary") or {}
+        lines.append(
+            f"**자문**: 매수 {s.get('buy', 0)} · 관망 {s.get('watch', 0)} · 제외 {s.get('skip', 0)}"
+        )
+        if buys:
+            lines.append("**매수 배지 (실행 대상)**:")
+            for i in buys[:5]:
+                stop = i.get("stop"); tgt = i.get("target")
+                lines.append(
+                    f"• **{i['name']}** ({i['code']}) @ {i.get('entry')} → "
+                    f"손절 {stop if stop else '-'} / 목표 {tgt if tgt else '-'}"
+                    + (f" (−{i['risk_pct']}%, {i['r_multiple']}R)" if i.get("risk_pct") else "")
+                )
+        else:
+            lines.append("매수 배지 **없음** — 오늘은 관망만")
+        if watch:
+            lines.append("관망: " + " · ".join(f"{i['name']}({i['code']})" for i in watch[:5]))
+
     if items:
         up = sum(1 for i in items if i["direction"] == "UP")
         by: dict[str, int] = {}
@@ -76,7 +101,7 @@ def compose() -> str:
         v = sum(1 for r in batch if r["status"] == "VOID")
         rate = h / (h + m) * 100 if (h + m) else 0.0
         note = f" · 무효 {v}" if v else ""
-        lines.append(f"**판정 {last}**: 적중 {h} / 미달 {m}{note} → **{rate:.1f}%**")
+        lines.append(f"**판정 {last}**: 맞음 {h} / 틀림 {m}{note} → **{rate:.1f}%**")
 
     sitems = sell.get("items") or []
     if sitems:
@@ -101,7 +126,9 @@ def compose() -> str:
                     f"{i['ret_pct']:+.2f}% · {i['exit_date']}"
                 )
 
-    lines.append("**판단 방법**: 신호 다음 거래일 종가가 진입가 ↑ → 적중 / ↓ → 미달 (T+1 종가 1회 판정)")
+    lines.append("**판단 방법**: 신호 다음 거래일 종가가 진입가 ↑ → 맞음 / ↓ → 틀림 (T+1 종가 1회 판정)")
+    lines.append("자문 **매수** 배지만 실행 대상 — 관망은 관찰, 제외는 손대지 않음 "
+                 "(기준선 46.89%를 검증기간 적중률로 넘는 전략·조건에서만 매수 허용)")
     lines.append("상태 **대기** = 판정 전 — 진입 금지 아님. 진입 창은 '신호 다음 거래일' 장중, 이후 재진입은 규칙 밖")
     lines.append("★ 기준 = 신고가 돌파폭 상위 5 + 5일 평균 대금 10억↑ · 매도 TP=60일선 회귀 / SL=신고 이전 60일 최저")
     lines.append(f"🔗 {PAGES_URL} (스코어보드·검증 근거·예측 기록)")

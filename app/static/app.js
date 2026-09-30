@@ -1,6 +1,7 @@
 const $ = (s) => document.querySelector(s);
 const fmt = (n) => (n == null ? "-" : Number(n).toLocaleString("ko-KR"));
 const STATUS_KO = { HIT: "맞음", MISS: "틀림", VOID: "제외", PENDING: "대기" };
+const ADVICE_CLS = { BUY: "ad-buy", WATCH: "ad-watch", SKIP: "ad-skip" };
 const STRAT_KO = { breakout: "신고가 돌파", ssanggul_bollinger: "쌍굴파기", bnf_oversold: "BNF 이격도80 역반등" };
 const STRAT_DESC = {
   breakout: "최근 60일 고점을 뚫고 올라간 종목 (추세 돌파)",
@@ -47,6 +48,7 @@ async function loadToday() {
       <td><b>${s.name || s.code}</b>
         <span class="tag" title="${STRAT_DESC[s.strategy] || ""}">${s.selected ? "★ 선택" : s.rank ? "#" + s.rank : ""} · ${STRAT_KO[s.strategy] || s.strategy}</span>
         <a class="to-report" href="#star-${s.code}">해석 ↓</a></td>
+      <td class="${ADVICE_CLS[s.action] || ""}"><b>${s.action_ko || "-"}</b></td>
       <td class="dir-${s.direction}">${s.direction === "UP" ? "오름 ↑" : "내림 ↓"}</td>
       <td>${fmt(s.entry_close)}</td>
       <td title="이격도 = 60일 평균 대비 · RSI = 오른 힘 (70↑ 과열 / 30↓ 과매도)"
@@ -55,8 +57,10 @@ async function loadToday() {
     </tr>`).join("");
   $("#today").className = "card table-wrap";
   $("#today").innerHTML = `<table><thead><tr>
-    <th>종목 / 전략</th><th>방향</th><th>진입 종가</th><th>이격도 / RSI</th><th>결과</th>
-    </tr></thead><tbody>${rows}</tbody></table>`;
+    <th>종목 / 전략</th><th>자문</th><th>방향</th><th>진입 종가</th><th>이격도 / RSI</th><th>결과</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+    <div class="note">자문 = <b>매수</b>만 실행 대상 · 관망은 관찰 · 제외는 손대지 않음
+      (근거는 각 행의 자문 단계에서 확인)</div>`;
   syncReportLinks();
 }
 
@@ -93,6 +97,16 @@ async function loadSell() {
     마우스를 <b>결과</b> 칸에 올리면 풀이가 뜬다.</div>`;
 }
 
+function _conf(c) {
+  if (!c || c.ci_low == null) return `<div class="conf">신뢰구간 계산 불가 (판정 없음)</div>`;
+  const sig = c.significant;
+  return `<div class="conf">
+    <span>95% 신뢰구간 <b>${c.ci_low}~${c.ci_high}%</b></span>
+    <span class="${sig ? (c.diff > 0 ? "c-up" : "c-dn") : "c-flat"}">
+      기준선 ${c.baseline}% 대비 ${c.diff > 0 ? "+" : ""}${c.diff}p · ${c.verdict}</span>
+  </div>`;
+}
+
 async function loadScoreboard() {
   const s = await staticApi("scoreboard");
   CACHE.scoreboard = s;
@@ -104,6 +118,7 @@ async function loadScoreboard() {
       <div class="name">전체</div>
       <div class="rate ${o.hit_rate == null ? "none" : ""}">${o.hit_rate == null ? "판정 데이터 없음" : o.hit_rate + "%"}</div>
       <div class="detail">맞음 ${o.hits} · 틀림 ${o.misses} · 대기 ${o.pending} · 제외 ${o.voids}</div>
+      ${_conf(o.confidence)}
       ${o.warning ? `<div class="warn">${o.warning}</div>` : ""}
     </div>`);
   for (const [key, v] of Object.entries(s.strategies)) {
@@ -112,6 +127,7 @@ async function loadScoreboard() {
         <div class="name">${v.display_name}</div>
         <div class="rate ${v.hit_rate == null ? "none" : ""}">${v.hit_rate == null ? "판정 데이터 없음" : v.hit_rate + "%"}</div>
         <div class="detail">맞음 ${v.hits} · 틀림 ${v.misses} · 대기 ${v.pending} · 판정 ${v.settled}건</div>
+        ${_conf(v.confidence)}
         ${v.warning ? `<div class="warn">${v.warning}</div>` : ""}
         ${v.caveats ? `<div class="caveat">⚠ ${v.caveats}</div>` : ""}
       </div>`);
@@ -191,6 +207,8 @@ function renderHero() {
 
   const items = (today && today.items) || [];
   const selected = items.filter((x) => x.selected);
+  const buys = items.filter((x) => x.action === "BUY");
+  const watch = items.filter((x) => x.action === "WATCH");
   const risk = stars.filter((s) => s.risk && s.risk.cls === "bad");
   const warn = stars.filter((s) => s.risk && s.risk.cls === "mid");
   const safe = stars.filter((s) => s.risk && s.risk.cls === "ok");
@@ -208,15 +226,21 @@ function renderHero() {
 
   box.innerHTML = `
     <div class="hero-steps">
-      <span><b>①</b> 오늘 신호 확인</span>
-      <span><b>②</b> <em class="v-bad">빨간 위험 표시</em>는 건드리지 말 것</span>
-      <span><b>③</b> 아래 '지난 기록'에서 적중률 확인</span>
+      <span><b>①</b> 오늘 <em class="v-buy">매수 배지</em> 확인</span>
+      <span><b>②</b> 매매 도구 탭에서 수량·손절가 확정</span>
+      <span><b>③</b> 지난 기록의 신뢰구간으로 믿을지 판단</span>
     </div>
     <div class="hero-grid">
       <div class="hero-box">
         <div class="hero-k">오늘 신호</div>
         <div class="hero-v ${items.length ? "" : "off"}">${items.length}<span class="unit">개</span></div>
         <div class="hero-n">${selected.length ? `그중 ★ 선택 ${selected.length}개` : "선택된 종목 없음"}${today && today.date ? ` · ${today.date} 기준` : ""}</div>
+      </div>
+      <div class="hero-box ${buys.length ? "buy" : ""}">
+        <div class="hero-k">오늘 매수 배지</div>
+        <div class="hero-v ${buys.length ? "good" : "off"}">${buys.length}<span class="unit">개</span></div>
+        <div class="hero-n">${buys.length ? buys.map((x) => x.name || x.code).join(" · ")
+          : items.length ? `관망 ${watch.length} · 나머지 제외` : "오늘 신호 없음"}</div>
       </div>
       <div class="hero-box ${risk.length ? "risk" : ""}">
         <div class="hero-k">위험 표시</div>
@@ -477,7 +501,7 @@ async function runScan() {
     const r = await api("api/scan", { method: "POST" });
     if (!r.ok) throw new Error(r.error || "스캔 실패");
     btn.textContent = `신규 ${r.new_signals}건 · 판정 ${r.settled.HIT + r.settled.MISS}건`;
-    await Promise.all([loadStatus(), loadToday(), loadReport(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults()]);
+    await Promise.all([loadStatus(), loadToday(), loadReport(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults(), loadAdvice()]);
     setTimeout(() => { btn.textContent = "스캔 실행"; }, 4000);
   } catch (e) {
     const webOnly = /→ (404|405)$/.test(String(e.message));
@@ -586,6 +610,247 @@ $("#scanBtn").addEventListener("click", runScan);
 $("#searchBtn").addEventListener("click", searchStock);
 $("#codeInput").addEventListener("keydown", (e) => { if (e.key === "Enter") searchStock(); });
 
+/* ── 매매 도구: 자문 · 사이저 · 주문 시트 · 매매일지 · 알림 ───────── */
+
+const RULES_DEFAULT = { risk_pct: 1.0, max_pos_pct: 20.0, max_total_pct: 60.0, default_capital: 3000000 };
+let ADV = null;      // advice.json
+let ORD = null;      // orders.json
+
+async function loadAdvice() {
+  try {
+    ADV = await staticApi("advice");
+  } catch (e) {
+    $("#advice").innerHTML = `<div class="empty">자문 데이터 없음 (export 미실행)</div>`;
+    return;
+  }
+  try {
+    ORD = await staticApi("orders");
+  } catch (e) { ORD = null; }
+  const s = ADV.summary || {};
+  $("#adviceSummary").innerHTML =
+    `${ADV.date || "-"} 기준 · ` +
+    `<span class="ad-buy">매수 ${s.buy || 0}</span> / ` +
+    `<span class="ad-watch">관망 ${s.watch || 0}</span> / ` +
+    `<span class="ad-skip">제외 ${s.skip || 0}</span> · ` +
+    `기준선 ${ADV.baseline}% (무작위로 찍어도 맞는 확률)`;
+  $("#adviceRules").innerHTML = (ADV.rules ? [
+    `진입: ${ADV.rules.entry}`,
+    `손절: ${ADV.rules.stop} · 목표: ${ADV.rules.target}`,
+    `1회 손실 ${ADV.rules.risk_pct}% · 종목당 ${ADV.rules.max_pos_pct}% · 총 ${ADV.rules.max_total_pct}%`,
+  ] : []).join("<br>") + (ADV.caveats || []).map((c) => `<br>⚠ ${c}`).join("");
+
+  const order = { BUY: 0, WATCH: 1, SKIP: 2 };
+  const items = [...(ADV.items || [])].sort((a, b) => order[a.action] - order[b.action]);
+  $("#advice").className = "card table-wrap";
+  $("#advice").innerHTML = `<table><thead><tr>
+    <th>자문</th><th>종목 / 전략</th><th>진입</th><th>손절</th><th>목표</th><th>근거</th>
+    </tr></thead><tbody>${items.map((i) => `
+    <tr>
+      <td class="${ADVICE_CLS[i.action]}"><b>${i.action_ko}</b></td>
+      <td><b>${i.name || i.code}</b> <span class="tag">${i.code} · ${STRAT_KO[i.strategy] || i.strategy}
+        ${i.selected ? "★" : ""}</span></td>
+      <td>${fmt(i.entry)}</td>
+      <td>${i.stop ? fmt(i.stop) + (i.risk_pct ? ` <span class="tag">(−${i.risk_pct}%)</span>` : "") : "-"}</td>
+      <td>${i.target ? fmt(i.target) + (i.r_multiple ? ` <span class="tag">(${i.r_multiple}R)</span>` : "") : "-"}</td>
+      <td class="why-cell">${(i.reasons || []).join("<br>")}</td>
+    </tr>`).join("")}</tbody></table>`;
+  renderSizer();
+  renderOrders();
+  notifyBuyChanges();
+}
+
+function sizerQty(cap, entry, stop, rules) {
+  if (!entry || entry <= 0) return { qty: 0, by: "-" };
+  const byCap = Math.floor((cap * rules.max_pos_pct / 100) / entry);
+  if (!stop || entry <= stop) return { qty: Math.max(0, byCap), by: "종목당 한도" };
+  const byRisk = Math.floor((cap * rules.risk_pct / 100) / (entry - stop));
+  const qty = Math.max(0, Math.min(byRisk, byCap));
+  return { qty, by: byRisk <= byCap ? "1회 리스크" : "종목당 한도" };
+}
+
+function renderSizer() {
+  if (!ADV) return;
+  const rules = { ...RULES_DEFAULT, ...(ADV.rules || {}) };
+  const cap = Math.max(100000, Number($("#capitalInput").value) || rules.default_capital);
+  $("#riskPctNote").textContent = rules.risk_pct + "%";
+  $("#sizerNums").innerHTML =
+    `1회 손실 한도 <b>${fmt(Math.round(cap * rules.risk_pct / 100))}원</b> · ` +
+    `종목당 <b>${fmt(Math.round(cap * rules.max_pos_pct / 100))}원</b> · ` +
+    `총 한도 <b>${fmt(Math.round(cap * rules.max_total_pct / 100))}원</b>`;
+
+  const buys = (ADV.items || []).filter((i) => i.action === "BUY" && i.entry);
+  if (!buys.length) {
+    $("#sizerOut").className = "card";
+    $("#sizerOut").innerHTML = `<div class="empty">오늘 '매수' 배지 종목이 없습니다 — 사이징할 대상 없음</div>`;
+    return;
+  }
+  $("#sizerOut").className = "card table-wrap";
+  $("#sizerOut").innerHTML = `<table><thead><tr>
+    <th>종목</th><th>진입가</th><th>손절가</th><th>수량</th><th>투자금</th><th>비중</th><th>손절 시 손실</th><th>결정 한도</th>
+    </tr></thead><tbody>${buys.map((i) => {
+      const { qty, by } = sizerQty(cap, i.entry, i.stop, rules);
+      const inv = qty * i.entry;
+      const loss = i.stop && i.entry > i.stop ? (i.entry - i.stop) * qty : null;
+      return `<tr>
+        <td><b>${i.name || i.code}</b> <span class="tag">${i.code}</span></td>
+        <td>${fmt(i.entry)}</td>
+        <td>${i.stop ? fmt(i.stop) : "-"}</td>
+        <td><b>${fmt(qty)}주</b></td>
+        <td>${fmt(Math.round(inv))}원</td>
+        <td>${inv ? (inv / cap * 100).toFixed(1) : "0"}%</td>
+        <td class="dir-DOWN">${loss == null ? "-" : "−" + fmt(Math.round(loss)) + "원"}</td>
+        <td class="tag">${by}</td>
+      </tr>`;
+    }).join("")}</tbody></table>
+    <div class="note">총 매수 예정액 ${fmt(Math.round(buys.reduce((t, i) =>
+      t + sizerQty(cap, i.entry, i.stop, rules).qty * i.entry, 0)))}원
+      (총 한도 ${fmt(Math.round(cap * rules.max_total_pct / 100))}원) ·
+      동시 보유 최대 3종목 — 초과분은 매수하지 않습니다.</div>`;
+}
+
+function renderOrders() {
+  if (!ORD) return;
+  const rows = ORD.orders || [];
+  if (!rows.length) {
+    $("#orders").innerHTML = `<div class="empty">오늘 주문할 '매수' 배지가 없습니다.</div>`;
+    return;
+  }
+  $("#orders").className = "card table-wrap";
+  $("#orders").innerHTML = `<table><thead><tr>
+    <th>종목</th><th>매수</th><th>수량</th><th>지정가</th><th>손절</th><th>목표</th><th>최대 손실</th><th>비중</th>
+    </tr></thead><tbody>${rows.map((o) => `
+    <tr>
+      <td><b>${o.name || o.code}</b> <span class="tag">${o.code} · ${o.signal_date}</span></td>
+      <td>${STRAT_KO[o.strategy] || o.strategy}</td>
+      <td><b>${fmt(o.qty)}주</b></td>
+      <td>${fmt(o.limit_price)}</td>
+      <td>${o.stop ? fmt(o.stop) : "-"}</td>
+      <td>${o.target ? fmt(o.target) : "-"}</td>
+      <td class="dir-DOWN">${o.max_loss ? "−" + fmt(o.max_loss) + "원" : "-"}</td>
+      <td>${o.invested_pct != null ? o.invested_pct + "%" : "-"}</td>
+    </tr>`).join("")}</tbody></table>`;
+}
+
+function downloadCSV(filename, header, rows) {
+  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = [header.map(esc).join(","),
+    ...rows.map((r) => r.map(esc).join(","))].join("\r\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+function exportOrdersCSV() {
+  const rows = (ORD && ORD.orders) || [];
+  if (!rows.length) { alert("다운로드할 주문이 없습니다."); return; }
+  downloadCSV(`orders_${(ORD.date || "unknown").replace(/-/g, "")}.csv`,
+    ["date", "code", "name", "strategy", "side", "qty", "price_type", "limit_price",
+     "stop", "target", "max_loss", "signal_date", "note"],
+    rows.map((o) => [ORD.date, o.code, o.name, o.strategy, o.side, o.qty, o.price_type,
+      o.limit_price, o.stop, o.target, o.max_loss, o.signal_date, o.note]));
+}
+
+/* 매매일지 — 브라우저 localStorage (서버에 안 보냄) */
+const JKEY = "cb_journal_v1";
+const loadJ = () => { try { return JSON.parse(localStorage.getItem(JKEY)) || []; } catch { return []; } };
+const saveJ = (list) => localStorage.setItem(JKEY, JSON.stringify(list));
+
+function renderJournal() {
+  const list = loadJ();
+  if (!list.length) {
+    $("#journal").className = "card";
+    $("#journal").innerHTML = `<div class="empty">일지 없음 — 매매하면 위 폼에서 추가하세요.</div>`;
+    $("#journalSum").textContent = "";
+    return;
+  }
+  $("#journal").className = "card table-wrap";
+  $("#journal").innerHTML = `<table><thead><tr>
+    <th>매매일</th><th>종목</th><th>수량</th><th>매수가</th><th>매도가</th><th>손익</th><th>손익%</th><th>사유</th><th></th>
+    </tr></thead><tbody>${list.map((j, idx) => {
+      const pnl = j.sell && j.buy ? (j.sell - j.buy) * j.qty : null;
+      const pct = pnl != null && j.buy ? (j.sell / j.buy - 1) * 100 : null;
+      return `<tr>
+        <td>${j.date}</td>
+        <td><b>${j.name || j.code}</b> <span class="tag">${j.code}</span></td>
+        <td>${fmt(j.qty)}주</td>
+        <td>${fmt(j.buy)}</td>
+        <td>${j.sell ? fmt(j.sell) : '<span class="tag">미청산</span>'}</td>
+        <td class="${pnl == null ? "" : pnl >= 0 ? "dir-UP" : "dir-DOWN"}">${pnl == null ? "-" : (pnl > 0 ? "+" : "") + fmt(Math.round(pnl))}</td>
+        <td class="${pct == null ? "" : pct >= 0 ? "dir-UP" : "dir-DOWN"}">${pct == null ? "-" : (pct > 0 ? "+" : "") + pct.toFixed(2) + "%"}</td>
+        <td class="why-cell">${j.why || ""}</td>
+        <td><button class="btn-mini" data-del="${idx}">삭제</button></td>
+      </tr>`;
+    }).join("")}</tbody></table>`;
+  $("#journal").querySelectorAll("[data-del]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const l = loadJ(); l.splice(Number(b.dataset.del), 1); saveJ(l); renderJournal();
+    }));
+
+  const closed = list.filter((j) => j.sell && j.buy);
+  const pnl = closed.reduce((t, j) => t + (j.sell - j.buy) * j.qty, 0);
+  const win = closed.filter((j) => j.sell > j.buy).length;
+  $("#journalSum").innerHTML =
+    `청산 ${closed.length}건 · 승 ${win} / 패 ${closed.length - win}` +
+    (closed.length ? ` · 합계 <b>${(pnl >= 0 ? "+" : "") + fmt(Math.round(pnl))}원</b>` : "") +
+    ` · 미청산 ${list.length - closed.length}건`;
+}
+
+function addJournal() {
+  const code = $("#jCode").value.trim();
+  const qty = Number($("#jQty").value), buy = Number($("#jBuy").value);
+  if (!/^\d{6}$/.test(code) || !qty || !buy) { alert("종목코드(6자리)·수량·매수가를 입력하세요"); return; }
+  const list = loadJ();
+  list.unshift({
+    date: $("#jDate").value || new Date().toISOString().slice(0, 10),
+    code, name: $("#jName").value.trim(), qty, buy,
+    stop: Number($("#jStop").value) || null,
+    sell: Number($("#jSell").value) || null,
+    why: $("#jWhy").value.trim(),
+  });
+  saveJ(list);
+  ["jCode", "jName", "jQty", "jBuy", "jStop", "jSell", "jWhy"].forEach((k) => $("#" + k).value = "");
+  renderJournal();
+}
+
+/* 브라우저 알림 — 매수 배지 목록이 바뀌면 알려줌 */
+function notifyKey() {
+  return ((ADV && ADV.items) || []).filter((i) => i.action === "BUY")
+    .map((i) => i.code).join(",");
+}
+function updateNotifyState() {
+  const on = typeof Notification !== "undefined" && Notification.permission === "granted";
+  $("#notifyState").textContent = on ? "켜짐" : "꺼짐";
+  return on;
+}
+function notifyBuyChanges() {
+  if (!updateNotifyState() || !ADV) return;
+  const key = notifyKey();
+  const prev = localStorage.getItem("cb_notify_last") || "";
+  if (prev !== "" && prev !== key) {
+    const buys = key ? key.split(",").length : 0;
+    new Notification("종가배팅 — 매수 배지 변경",
+      { body: `${ADV.date} 기준 매수 배지 ${buys}종목${prev ? " (이전: " + prev.split(",").length + "종목)" : ""}` });
+  }
+  localStorage.setItem("cb_notify_last", key);
+}
+async function enableNotify() {
+  if (typeof Notification === "undefined") { alert("이 브라우저는 알림을 지원하지 않습니다"); return; }
+  const p = await Notification.requestPermission();
+  updateNotifyState();
+  if (p === "granted") { new Notification("종가배팅 알림 켜짐", { body: "새로고침 시 매수 배지 변경을 알려드립니다." }); notifyBuyChanges(); }
+}
+
+$("#capitalInput").addEventListener("input", renderSizer);
+$("#csvBtn").addEventListener("click", exportOrdersCSV);
+$("#jAdd").addEventListener("click", addJournal);
+$("#jClear").addEventListener("click", () => {
+  if (confirm("일지를 모두 지울까요? 되돌릴 수 없습니다.")) { saveJ([]); renderJournal(); }
+});
+$("#notifyBtn").addEventListener("click", enableNotify);
+
 /* 상단 탭 — 현재 보고 있는 섹션 강조 */
 function initTabs() {
   const links = [...document.querySelectorAll(".tabs a")];
@@ -620,5 +885,7 @@ function initTabs() {
 
 (async function init() {
   initTabs();
-  await Promise.all([loadStatus(), loadToday(), loadReport(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults()]);
+  updateNotifyState();
+  renderJournal();
+  await Promise.all([loadStatus(), loadToday(), loadReport(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults(), loadAdvice()]);
 })();

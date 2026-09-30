@@ -22,7 +22,8 @@
 <nav class="tabs">
   <a href="#today-sec" class="on">1. 오늘</a>
   <a href="#log-sec">2. 지난 기록</a>
-  <a href="#detail-sec">3. 상세히 보기</a>
+  <a href="#tool-sec">3. 매매 도구</a>
+  <a href="#detail-sec">4. 상세히 보기</a>
 </nav>
 
 <main>
@@ -55,7 +56,69 @@
     </thead><tbody></tbody></table></div>
   </section>
 
-  <!-- 3. 상세히 보기 -->
+  <!-- 3. 매매 도구 -->
+  <section id="tool-sec">
+    <h2>3. 매매 도구 <span class="tag">실전 주문에 쓰는 자리</span></h2>
+    <div class="howto">
+      <b>사용 순서</b> ① 아래 주문 시트에서 <b>매수</b> 배지만 확인 →
+      ② 포지션 사이저로 수량 확정 → ③ 주문 시트 CSV를 내려받아 증권사에 입력 →
+      ④ 체결되면 매매일지에 기록. <b>자문 배지가 '매수'가 아니면 손대지 않습니다.</b>
+    </div>
+
+    <h3 class="verif-title">자문 — 오늘의 매수 / 관망 / 제외</h3>
+    <div id="adviceSummary" class="note"></div>
+    <div id="advice" class="card">로딩…</div>
+    <div id="adviceRules" class="note"></div>
+
+    <h3 class="verif-title">포지션 사이저 <span class="tag">자본금을 바꾸면 수량이 바뀝니다</span></h3>
+    <div class="sizer">
+      <label>자본금
+        <input id="capitalInput" type="number" min="100000" step="100000" value="3000000">
+      </label>
+      <div class="sizer-nums" id="sizerNums"></div>
+    </div>
+    <div id="sizerOut" class="card">사이저 준비 중…</div>
+    <div class="note">규칙: 1회 손실 = 자본의 <b id="riskPctNote">1%</b> · 종목당 최대 20% ·
+      총 신규 매수 60% 이내 · 동시 보유 3종목. 자세한 것은
+      <code>docs/실행지침서.md</code>.</div>
+
+    <h3 class="verif-title">주문 시트 <span class="tag">매수 배지 종목만</span></h3>
+    <div class="orders-actions">
+      <button id="csvBtn">주문 시트 CSV 다운로드</button>
+      <span class="tag">Excel 한글 깨짐 없음 (UTF-8 BOM)</span>
+    </div>
+    <div id="orders" class="card">로딩…</div>
+    <div class="note">주문 파일 규격: <code>docs/orderspec.md</code> —
+      <b>자동 주문은 제공하지 않습니다</b> (사람 검수 필수).</div>
+
+    <h3 class="verif-title">매매일지 <span class="tag">이 브라우저에 자동 저장</span></h3>
+    <div class="journal-form">
+      <input id="jDate" type="date" title="매매일">
+      <input id="jCode" placeholder="종목코드" maxlength="6">
+      <input id="jName" placeholder="종목명">
+      <input id="jQty" type="number" min="1" placeholder="수량">
+      <input id="jBuy" type="number" step="0.01" placeholder="매수가">
+      <input id="jStop" type="number" step="0.01" placeholder="손절가">
+      <input id="jSell" type="number" step="0.01" placeholder="매도가(나중)">
+      <input id="jWhy" placeholder="매매 사유">
+      <button id="jAdd">일지 추가</button>
+      <button id="jClear" class="btn-ghost">전체 삭제</button>
+    </div>
+    <div id="journal" class="card table-wrap">로딩…</div>
+    <div id="journalSum" class="note"></div>
+
+    <h3 class="verif-title">알림</h3>
+    <div class="orders-actions">
+      <button id="notifyBtn">브라우저 알림 켜기</button>
+      <span class="tag" id="notifyState">꺼짐</span>
+    </div>
+    <div class="note">새로고침하면 오늘의 <b>매수 배지 종목</b>이 이전과 다르면 알립니다.
+      서버 쪽 자동 알림(텔레그램·디스코드·GitHub 이슈)은 매일 Actions에서 이미 보내고 있습니다 —
+      Secrets에 <code>TELEGRAM_BOT_TOKEN</code> 또는 <code>DISCORD_WEBHOOK_URL</code>을 넣으면
+      받을 수 있습니다.</div>
+  </section>
+
+  <!-- 4. 상세히 보기 -->
   <section id="detail-sec">
     <h2>상세히 보기 <span class="tag">평소엔 접어두어도 됩니다</span></h2>
 

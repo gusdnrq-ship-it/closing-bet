@@ -292,3 +292,52 @@ th[title], td[title], .risk[title] { cursor: help; }
 
 /* 질문형 섹션 제목 */
 h2 { word-break: keep-all; }
+
+/* 매수 배지 · 자문 · 사이저 · 매매일지 */
+.hero-box.buy { border-color: rgba(55,201,120,.55); background: rgba(55,201,120,.08); }
+.hero-v.good { color: var(--hit); }
+.hero-steps em.v-buy { color: var(--hit); }
+td.ad-buy, span.ad-buy, .ad-buy { color: var(--hit); }
+td.ad-watch, span.ad-watch, .ad-watch { color: var(--accent); }
+td.ad-skip, span.ad-skip, .ad-skip { color: var(--muted); }
+td.why-cell { white-space: normal; min-width: 240px; line-height: 1.55; font-size: 12px; color: var(--muted); }
+
+.score .conf { margin-top: 7px; font-size: 11px; line-height: 1.5; color: var(--muted); }
+.score .conf b { color: var(--text); }
+.score .conf .c-up { color: var(--hit); }
+.score .conf .c-dn { color: var(--miss); }
+.score .conf .c-flat { color: var(--accent); }
+
+.sizer {
+  display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 12px 14px; margin-bottom: 8px;
+}
+.sizer label { font-size: 12.5px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.sizer input, .journal-form input {
+  background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+  border-radius: 7px; padding: 8px 10px; font-size: 13px; width: 140px;
+}
+.sizer-nums { font-size: 12.5px; color: var(--muted); }
+.sizer-nums b { color: var(--text); }
+
+.orders-actions { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.btn-ghost:hover:not(:disabled) { color: var(--miss); border-color: var(--miss); filter: none; }
+.btn-mini {
+  background: transparent; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 6px; padding: 3px 8px; font-size: 11px; cursor: pointer;
+}
+.btn-mini:hover { color: var(--miss); border-color: var(--miss); }
+
+.journal-form {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 12px 14px; margin-bottom: 8px;
+}
+.journal-form input { width: auto; min-width: 96px; flex: 0 1 auto; }
+.journal-form input#jWhy { min-width: 160px; }
+code { background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-size: 12px; color: var(--accent); }
+@media (max-width: 640px) {
+  .sizer input, .journal-form input { width: 100%; }
+}
