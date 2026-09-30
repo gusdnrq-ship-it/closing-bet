@@ -149,16 +149,23 @@ def build(conn, static_gates: dict) -> dict:
     }
 
 
-# 갱신 이력 (export가 learn.json을 읽어 append)
+# 갱신 이력 (export가 learn.json에 append, 원본은 DB meta에 보관)
 def append_history(prev: dict | None, snap: dict, keep: int = 30) -> list:
-    hist = list((prev or {}).get("history") or [])
+    """하루에 한 줄만 남긴다 — 하루에 export가 여러 번 돌면 마지막 스냅샷으로 갱신."""
+    hist = [h for h in ((prev or {}).get("history") or [])
+            if _day(h.get("date")) != _day(snap.get("date"))]
     hist.append(snap)
     return hist[-keep:]
 
 
+def _day(d: str | None) -> str:
+    return (d or "")[:10]
+
+
 def snapshot(res: dict) -> dict:
     return {"date": res.get("date"), "strategies": {
-        k: {"live_n": v["live_n"], "live_rate": v["live_rate"],
+        k: {"static_state": v["static_state"], "live_n": v["live_n"],
+            "live_rate": v["live_rate"],
             "mean": v["posterior"]["mean"], "ci": v["posterior"]["ci"],
             "learned": v["learned"], "applied": v["applied"], "changed": v["changed"]}
         for k, v in res["strategies"].items()}}
