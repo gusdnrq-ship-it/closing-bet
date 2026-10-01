@@ -10,6 +10,9 @@ on:
     paths:
       - "data/journal/**"
       - "data/journal.csv"
+  schedule:
+    # 구글시트 자동 반영 — 평일 30분마다 (시트 수정이 최대 30분 안에 반영됨)
+    - cron: "*/30 * * * 1-5"
   workflow_dispatch:
     inputs:
       sheet_url:
