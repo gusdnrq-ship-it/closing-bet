@@ -71,6 +71,9 @@ def _num(v, kind: str):
 
 def _row(raw: dict, source: str) -> dict:
     r = {c: (str(raw.get(c) or "").strip()) for c in COLUMNS}
+    # 종목코드: 시트가 숫자로 인식해 앞자리 0이 빠진 경우 복원 (027830 ← 27830)
+    if r["code"].isdigit() and len(r["code"]) <= 6:
+        r["code"] = r["code"].zfill(6)
     for c in NUM:
         r[c] = _num(raw.get(c), c)
     for c in QTY:
