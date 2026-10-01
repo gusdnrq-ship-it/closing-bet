@@ -63,7 +63,10 @@ def main():
     if args.cmd == "universe":
         rows = universe.refresh_universe(conn)
         kospi = sum(1 for r in rows if r["market"] == "KOSPI")
-        print(f"유니버스 수집 완료: {len(rows)}종목 (코스피 {kospi} / 코스닥 {len(rows)-kospi})")
+        blocked = conn.execute(
+            f"SELECT COUNT(*) c FROM stocks WHERE {db.BLOCKED}").fetchone()["c"]
+        print(f"유니버스 수집 완료: {len(rows)}종목 (코스피 {kospi} / 코스닥 {len(rows)-kospi}) "
+              f"— 후보 제외 {blocked}종목 (거래정지·관리종목)")
 
     elif args.cmd == "backfill":
         codes = args.codes

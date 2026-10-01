@@ -29,6 +29,8 @@ def export_api(conn=None) -> dict:
     try:
         status = {
             "stocks": conn.execute("SELECT COUNT(*) c FROM stocks").fetchone()["c"],
+            "blocked_stocks": conn.execute(
+                f"SELECT COUNT(*) c FROM stocks WHERE {db.BLOCKED}").fetchone()["c"],
             "ohlcv_rows": conn.execute("SELECT COUNT(*) c FROM ohlcv").fetchone()["c"],
             "last_trade_date": db.get_meta(conn, "last_trade_date")
             or conn.execute("SELECT MAX(date) FROM ohlcv").fetchone()[0],

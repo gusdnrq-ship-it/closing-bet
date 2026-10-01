@@ -1,6 +1,7 @@
 """실전 실행 자문 — 오늘 후보에 '매수 / 관망 / 제외'와 진입·손절·목표 가격을 붙인다.
 
 판단 근거 (전부 5년 재실행 검증 결과, docs/20260929_분석리포트.md):
+- 거래정지·관리종목 지정 종목은 어떤 경우에도 제외 (실전 투자 규칙 — 백테스트 미반영)
 - 방향이 '내림(DOWN)'인 신호는 공매도 미지원 → 제외
 - 전략 게이트: BNF 검증 57.0% (n=24,550) 통과 / breakout 전체 45.8% = 기준선(46.89%) 하회
   → breakout은 '돌파폭≥10% & 5일대금≥100억 & RSI≥80' 3조건 동시 충족(검증 51.3%, n=2,040)에만 허용
@@ -62,6 +63,7 @@ CAVEATS = [
     "손절선·목표가는 자금 보호·회수 수단일 뿐, 백테스트에서 이점을 입증하지 못했다 "
     "(breakout TP는 검증에서 −0.91p, BNF SL은 −6.56p).",
     "슬리피지·수수료·상하한가 미반영. 표본 10건 미만은 통계적 유의성이 없다.",
+    "관리종목·거래정지 제외 규칙은 실전 자문에만 적용 — 백테스트 적중률에는 반영되지 않는다.",
 ]
 
 
@@ -226,9 +228,34 @@ def _decide(it: dict, risk: dict, gate: dict, stop, target,
     return "BUY", reasons
 
 
+def _blocked(conn, codes: list[str]) -> dict[str, str]:
+    """거래정지·관리종목 지정 종목의 제외 사유 (code → 사유 문구).
+
+    스캔 단계(db.ELIGIBLE)에서 이미 걸러지지만, 지정 이전에 만들어진 신호가
+    남아 있을 수 있으므로 자문 단계에서 한 번 더 막는다.
+    """
+    if conn is None or not codes:
+        return {}
+    q = ",".join("?" * len(codes))
+    out: dict[str, str] = {}
+    for r in conn.execute(
+        f"SELECT code, trade_stop, manage_gb, manage_date FROM stocks "
+        f"WHERE code IN ({q}) AND {db.BLOCKED}", list(codes),
+    ):
+        why = []
+        if r["trade_stop"] == "Y":
+            why.append("거래정지")
+        if r["manage_gb"] not in (None, "", "0"):
+            why.append(f"관리종목 지정 {r['manage_date']}" if r["manage_date"]
+                       else "관리종목 지정")
+        out[r["code"]] = " · ".join(why) + " — 매수 대상 제외"
+    return out
+
+
 def build(conn, today: dict, rep: dict | None, sell: dict, gates: dict | None = None) -> dict:
     items_in = (today or {}).get("items") or []
     sell_by = {(s["code"], s["signal_date"]): s for s in (sell.get("items") or [])}
+    blocked = _blocked(conn, [i["code"] for i in items_in])
     risk_by = {}
     if rep:
         for s in (rep.get("stars") or {}).get("items") or []:
@@ -249,7 +276,10 @@ def build(conn, today: dict, rep: dict | None, sell: dict, gates: dict | None = 
         if entry and stop and target and entry > stop:
             r_mult = round((target - entry) / (entry - stop), 2)
 
-        action, reasons = _decide(it, risk, gate, stop, target, risk_pct, r_mult)
+        if it["code"] in blocked:
+            action, reasons = "SKIP", [blocked[it["code"]]]
+        else:
+            action, reasons = _decide(it, risk, gate, stop, target, risk_pct, r_mult)
         conf_mult, conf_note = confidence(gates, it["strategy"], gate["state"])
         if action == "BUY" and conf_mult != 1:
             reasons.append(f"게이트 신뢰도 ×{conf_mult} — {conf_note}")

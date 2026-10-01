@@ -65,10 +65,9 @@ def fetch_universe() -> list[dict]:
                 continue
             if config.EXCLUDE_ETF_ETN and it.get("type") not in ALLOWED_TYPE:
                 continue
-            if config.EXCLUDE_HALTED and it.get("tradeStopYn") == "Y":
-                continue
-            if config.EXCLUDE_MANAGEMENT and it.get("manageStatusGb") not in (None, "", "0"):
-                continue
+            # 거래정지·관리종목도 **저장은 한다**. fetch에서 걸러내면 지정 이후
+            # 갱신이 중단돼 이전 값(manage_gb='0')이 남아 스캐너가 다시 집계한다.
+            # 후보 제외는 db.ELIGIBLE 쿼리 조건이 담당한다.
             out.append(
                 {
                     "code": code,
@@ -77,6 +76,7 @@ def fetch_universe() -> list[dict]:
                     "market_sum": float(it["marketSum"]) if it.get("marketSum") else None,
                     "trade_stop": it.get("tradeStopYn"),
                     "manage_gb": it.get("manageStatusGb"),
+                    "manage_date": it.get("managementDate"),
                 }
             )
         page += 1
@@ -92,11 +92,11 @@ def refresh_universe(conn=None) -> list[dict]:
     rows = fetch_universe()
     ts = db.now()
     conn.executemany(
-        "INSERT INTO stocks(code, name, market, market_sum, trade_stop, manage_gb, updated) "
-        "VALUES(:code, :name, :market, :market_sum, :trade_stop, :manage_gb, :updated) "
+        "INSERT INTO stocks(code, name, market, market_sum, trade_stop, manage_gb, manage_date, updated) "
+        "VALUES(:code, :name, :market, :market_sum, :trade_stop, :manage_gb, :manage_date, :updated) "
         "ON CONFLICT(code) DO UPDATE SET name=excluded.name, market=excluded.market, "
         "market_sum=excluded.market_sum, trade_stop=excluded.trade_stop, "
-        "manage_gb=excluded.manage_gb, updated=excluded.updated",
+        "manage_gb=excluded.manage_gb, manage_date=excluded.manage_date, updated=excluded.updated",
         [{**r, "updated": ts} for r in rows],
     )
     db.set_meta(conn, "universe_updated", ts)

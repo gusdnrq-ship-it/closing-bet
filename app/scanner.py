@@ -92,7 +92,8 @@ def run_scan(conn, strategy_names: list[str] | None = None, now: datetime | None
         else strategies.all_strategies()
     )
 
-    codes = [r["code"] for r in conn.execute("SELECT code FROM stocks")]
+    # 거래정지·관리종목 지정 종목은 신호 생성 자체를 하지 않는다 (원천 차단)
+    codes = [r["code"] for r in conn.execute(f"SELECT code FROM stocks WHERE {db.ELIGIBLE}")]
     evaluated, new_signals, errors = 0, 0, 0
     for code in codes:
         df = data.load_df(conn, code, limit=260)

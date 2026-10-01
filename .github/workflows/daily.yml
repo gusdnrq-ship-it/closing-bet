@@ -84,6 +84,9 @@ jobs:
         env:
           JOURNAL_EXTRA_CSV: ${{ steps.sheet.outputs.path }}
         run: |
+          # 유니버스 갱신: 거래정지·관리종목 지정 상태를 매일 다시 받아온다
+          # (이 값이 없으면 지정 이후 갱신이 멈춰 매수 배지가 그대로 남는다)
+          python run.py universe || echo "::warning::universe 실패 — 기존 유니버스로 계속"
           python run.py refresh
           python run.py scan
           python run.py export

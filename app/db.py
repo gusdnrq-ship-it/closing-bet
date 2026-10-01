@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS stocks (
     market_sum   REAL,
     trade_stop   TEXT,
     manage_gb    TEXT,
+    manage_date  TEXT,
     updated      TEXT
 );
 
@@ -55,7 +56,27 @@ def connect(db_path=None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(stocks)")}
+    if "manage_date" not in cols:
+        conn.execute("ALTER TABLE stocks ADD COLUMN manage_date TEXT")
+    conn.commit()
+
+
+# 후보(매수 대상) 조건 — 거래정지·관리종목 지정 종목은 신호 생성과 매수 판정에서 제외.
+# (fetch 단계가 아니라 쿼리 단계에서 판정한다. fetch에서 걸러내면 지정 이후
+#  갱신이 '건너뛰기' 되어 이전 값이 DB에 남기 때문이다 — 377220 사고 원인.)
+_bad: list[str] = []
+if config.EXCLUDE_HALTED:
+    _bad.append("COALESCE(trade_stop, 'N') = 'Y'")
+if config.EXCLUDE_MANAGEMENT:
+    _bad.append("COALESCE(manage_gb, '', '0') NOT IN ('', '0')")
+BLOCKED = f"({' OR '.join(_bad)})" if _bad else "(0)"
+ELIGIBLE = f"(NOT {BLOCKED})"
 
 
 def set_meta(conn, key: str, value: str) -> None:
