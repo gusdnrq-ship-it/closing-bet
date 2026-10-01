@@ -61,3 +61,6 @@ DEFAULT_CAPITAL = 3_000_000  # 사이저 기본 자본금
 # 서버
 HOST = "127.0.0.1"
 PORT = 8788
+
+# 저장소 (매매일지 업로드 링크용)
+REPO = "gusdnrq-ship-it/closing-bet"

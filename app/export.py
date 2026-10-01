@@ -8,7 +8,8 @@ import json
 from pathlib import Path
 
 import config
-from app import advice, db, learn, report, scoreboard, sell_timing, timeline, verification
+from app import (advice, db, journal, learn, report, scoreboard, sell_timing,
+                 timeline, verification)
 
 API_DIR = config.BASE_DIR / "app" / "static" / "api"
 
@@ -69,13 +70,26 @@ def export_api(conn=None) -> dict:
         sell = sell_timing.build(conn)
         _write("sell.json", sell)
 
+        # 매매일지: data/journal/*.csv → DB 병합 → journal.json 발행
+        jsum = {"by_strategy": {}, "closed": 0, "open": 0, "wins": 0, "losses": 0,
+                "win_rate": None, "total_pnl": 0, "avg_pct": None}
+        try:
+            jp = journal.publish(conn, exported=status["exported"])
+            jsum = jp["summary"]
+        except Exception as e:
+            print(f"journal.json 생성 실패: {e}")
+        realized = dict(jsum.get("by_strategy") or {})
+        realized["_total"] = {k: jsum.get(k) for k in
+                              ("total", "closed", "open", "wins", "losses",
+                               "win_rate", "total_pnl", "avg_pct")}
+
         # 실전 자문: 매수/관망/제외 + 손절·목표 (today.json에 주입)
         try:
             try:
                 prev_hist = json.loads(db.get_meta(conn, "learn_history") or "[]")
             except Exception:
                 prev_hist = []
-            learned = learn.build(conn, advice.GATE)
+            learned = learn.build(conn, advice.GATE, realized=realized)
             learned["date"] = status["exported"]
             learned["history"] = learn.append_history({"history": prev_hist},
                                                       learn.snapshot(learned))

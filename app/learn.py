@@ -80,8 +80,14 @@ def _learned_state(post: dict) -> str:
     return "판정없음"
 
 
-def build(conn, static_gates: dict) -> dict:
-    """전략별 사후분포와 적용 게이트를 돌려준다. static_gates는 advice.GATE."""
+def build(conn, static_gates: dict, realized: dict | None = None) -> dict:
+    """전략별 사후분포와 적용 게이트를 돌려준다. static_gates는 advice.GATE.
+
+    realized는 매매일지(journal)의 전략별 실현 성적 — 판정 수학에는 쓰지 않고
+    화면에서 '실전 신호 적중률'과 나란히 보여주는 참고 자료로만 붙인다.
+    (둘은 다른 사건이다: 신호 판정 = 익일 종가, 실현 = 내가 실제로 매매해서 남긴 손익)
+    """
+    realized = realized or {}
     rows = conn.execute(
         "SELECT strategy, "
         "SUM(CASE WHEN status='HIT' THEN 1 ELSE 0 END) hits, "
@@ -124,6 +130,7 @@ def build(conn, static_gates: dict) -> dict:
             "live_rate": round(hits / live_n * 100, 1) if live_n else None,
             "posterior": post, "learned": learned,
             "applied": applied, "changed": changed, "detail": detail, "warn": warn,
+            "realized": realized.get(st),
         }
 
     # 판정이 한 건도 없는 전략도 화면에 남긴다 (0건 = 아무것도 모른다)
@@ -139,13 +146,16 @@ def build(conn, static_gates: dict) -> dict:
             "applied": static.get("state"), "changed": False,
             "detail": f"실전 판정 0건 → 게이트 변경 없음 · 백테스트 {static.get('state')} 유지",
             "warn": "실전 판정 0건",
+            "realized": realized.get(st),
         }
 
     return {
         "date": None, "baseline": BASELINE, "prior_n": PRIOR_N,
         "strategies": strat,
+        "realized_total": realized.get("_total"),
         "note": ("발전형 게이트: 백테스트 검증승률(사전) + 실전 판정(관측) → 베이지안 사후. "
-                 "95% 구간이 기준선을 확실히 넘을/미칠 때만 판정이 바뀐다."),
+                 "95% 구간이 기준선을 확실히 넘을/미칠 때만 판정이 바뀐다. "
+                 "매매일지 실현 성적은 참고 표시이며 판정 수학에는 들어가지 않는다."),
     }
 
 

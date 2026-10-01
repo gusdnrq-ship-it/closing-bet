@@ -501,7 +501,8 @@ async function runScan() {
     const r = await api("api/scan", { method: "POST" });
     if (!r.ok) throw new Error(r.error || "스캔 실패");
     btn.textContent = `신규 ${r.new_signals}건 · 판정 ${r.settled.HIT + r.settled.MISS}건`;
-    await Promise.all([loadStatus(), loadToday(), loadReport(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults(), loadAdvice(), loadLearn()]);
+    await Promise.all([loadStatus(), loadToday(), loadReport(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults(), loadAdvice(), loadLearn(), loadJournal()]);
+    renderJournal();
     setTimeout(() => { btn.textContent = "스캔 실행"; }, 4000);
   } catch (e) {
     const webOnly = /→ (404|405)$/.test(String(e.message));
@@ -713,9 +714,26 @@ async function loadLearn() {
       <tbody>${rows}</tbody></table></details>`;
   }
 
+  /* 매매일지 실현 성적 — 참고 표시 (게이트 판정 수학에는 들어가지 않음) */
+  const rz = [];
+  Object.keys(L.strategies || {}).forEach((k) => {
+    const r = L.strategies[k].realized;
+    if (!r || !r.closed) return;
+    const pct = r.avg_pct == null ? "-" : (r.avg_pct > 0 ? "+" : "") + r.avg_pct + "%";
+    rz.push(`${STRAT_KO[k] || k}: 실현 ${r.closed}건 · 승률 ${r.win_rate != null ? r.win_rate + "%" : "-"} · 평균 ${pct}`);
+  });
+  const tz = L.realized_total || {};
+  if (tz.closed) {
+    rz.unshift(`전체 실현 ${tz.closed}건 · 승 ${tz.wins} / 패 ${tz.losses}` +
+      (tz.total_pnl != null ? ` · 합계 ${(tz.total_pnl >= 0 ? "+" : "") + fmt(tz.total_pnl)}원` : ""));
+  }
+  const rzHtml = rz.length
+    ? `<div class="gate-detail">매매일지 실현(참고 — 판정 수학 미반영): ${rz.join(" · ")}</div>`
+    : "";
+
   el.innerHTML = `<b>발전형 게이트</b> — 백테스트(사전) + 실전 판정(관측) → 베이지안 사후.
     95% 구간이 기준선(${L.baseline}%)을 <b>확실히</b> 넘거나 미칠 때만 판정이 바뀝니다.
-    <div class="gate-list">${chips}</div>${histHtml}`;
+    <div class="gate-list">${chips}</div>${rzHtml}${histHtml}`;
 }
 
 function sizerQty(cap, entry, stop, rules) {
@@ -846,13 +864,65 @@ function exportOrdersCSV() {
       o.signal_date, o.note]));
 }
 
-/* 매매일지 — 브라우저 localStorage (서버에 안 보냄) */
+/* 매매일지 — 브라우저 localStorage(이 기기) + 서버 저장소 CSV 병합.
+   서버 반영은 '서버에 올리기' → GitHub 신규 파일 커밋 → Actions(journal-publish) → journal.json */
 const JKEY = "cb_journal_v1";
+const REPO = "gusdnrq-ship-it/closing-bet";
+const JCOLS = ["date", "code", "name", "strategy", "signal_date", "side",
+  "entry", "qty", "stop", "target", "exit_date", "exit_price", "exit_reason",
+  "pnl", "pnl_pct", "memo"];
 const loadJ = () => { try { return JSON.parse(localStorage.getItem(JKEY)) || []; } catch { return []; } };
 const saveJ = (list) => localStorage.setItem(JKEY, JSON.stringify(list));
+let JOUR = null;   // static/api/journal.json
+
+async function loadJournal() {
+  try { JOUR = await staticApi("journal"); } catch (e) { JOUR = null; }
+}
+
+/* localStorage 한 건을 서버 스키마와 같은 모양으로 */
+function localToRow(j) {
+  const entry = Number(j.buy) || null;
+  const exit = Number(j.sell) || null;
+  const qty = Number(j.qty) || null;
+  const pnl = entry && exit && qty ? (exit - entry) * qty : null;
+  return {
+    date: j.date || "", code: j.code, name: j.name || "", strategy: j.strategy || "",
+    signal_date: j.signal_date || "", side: "BUY",
+    entry, qty, stop: Number(j.stop) || null, target: null,
+    exit_date: exit ? (j.exit_date || "") : "",
+    exit_price: exit, exit_reason: j.exit_reason || "",
+    pnl, pnl_pct: entry && exit ? Math.round((exit / entry - 1) * 10000) / 100 : null,
+    memo: j.why || "", src: "이 기기", _i: j._i,
+  };
+}
+
+/* 서버 + 이 기기 병합.
+   같은 매매일+종목은 서버가 이미 있으면 서버가 정본('동기화됨')이고 이 기기 건은 감춘다.
+   — 두 출처의 스키마가 조금 달라서(신호일·청산일 유무) 키를 날짜+종목으로 단순화한다. */
+function journalRows() {
+  const srv = ((JOUR && JOUR.items) || []).map((r) => ({ ...r, src: "서버" }));
+  const localKeys = new Set();
+  loadJ().forEach((j) => localKeys.add(`${j.date || ""}|${j.code || ""}`));
+  const serverKeys = new Set(srv.map((r) => `${r.date || ""}|${r.code || ""}`));
+  srv.forEach((r) => {
+    if (localKeys.has(`${r.date || ""}|${r.code || ""}`)) r.src = "동기화됨";
+  });
+  const loc = loadJ()
+    .map((j, i) => localToRow({ ...j, _i: i }))
+    .filter((r) => !serverKeys.has(`${r.date || ""}|${r.code || ""}`));
+  return [...srv, ...loc].sort((a, b) =>
+    String(b.date || "").localeCompare(String(a.date || "")) ||
+    String(a.code || "").localeCompare(String(b.code || "")));
+}
+
+function rowsToCSV(rows) {
+  const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  return [JCOLS.join(","),
+    ...rows.map((r) => JCOLS.map((c) => esc(r[c] ?? "")).join(","))].join("\r\n");
+}
 
 function renderJournal() {
-  const list = loadJ();
+  const list = journalRows();
   if (!list.length) {
     $("#journal").className = "card";
     $("#journal").innerHTML = `<div class="empty">일지 없음 — 매매하면 위 폼에서 추가하세요.</div>`;
@@ -861,20 +931,22 @@ function renderJournal() {
   }
   $("#journal").className = "card table-wrap";
   $("#journal").innerHTML = `<table><thead><tr>
-    <th>매매일</th><th>종목</th><th>수량</th><th>매수가</th><th>매도가</th><th>손익</th><th>손익%</th><th>사유</th><th></th>
-    </tr></thead><tbody>${list.map((j, idx) => {
-      const pnl = j.sell && j.buy ? (j.sell - j.buy) * j.qty : null;
-      const pct = pnl != null && j.buy ? (j.sell / j.buy - 1) * 100 : null;
+    <th>매매일</th><th>종목</th><th>출처</th><th>수량</th><th>매수가</th><th>매도가</th><th>손익</th><th>손익%</th><th>사유</th><th></th>
+    </tr></thead><tbody>${list.map((r) => {
+      const pnl = r.pnl;
+      const pct = r.pnl_pct;
+      const canDel = r.src === "이 기기";
       return `<tr>
-        <td>${j.date}</td>
-        <td><b>${j.name || j.code}</b> <span class="tag">${j.code}</span></td>
-        <td>${fmt(j.qty)}주</td>
-        <td>${fmt(j.buy)}</td>
-        <td>${j.sell ? fmt(j.sell) : '<span class="tag">미청산</span>'}</td>
+        <td>${r.date || "-"}</td>
+        <td><b>${r.name || r.code}</b> <span class="tag">${r.code}</span></td>
+        <td><span class="tag ${r.src === "이 기기" ? "" : "ad-watch"}">${r.src}</span></td>
+        <td>${fmt(r.qty)}주</td>
+        <td>${fmt(r.entry)}</td>
+        <td>${r.exit_price ? fmt(r.exit_price) : '<span class="tag">미청산</span>'}</td>
         <td class="${pnl == null ? "" : pnl >= 0 ? "dir-UP" : "dir-DOWN"}">${pnl == null ? "-" : (pnl > 0 ? "+" : "") + fmt(Math.round(pnl))}</td>
         <td class="${pct == null ? "" : pct >= 0 ? "dir-UP" : "dir-DOWN"}">${pct == null ? "-" : (pct > 0 ? "+" : "") + pct.toFixed(2) + "%"}</td>
-        <td class="why-cell">${j.why || ""}</td>
-        <td><button class="btn-mini" data-del="${idx}">삭제</button></td>
+        <td class="why-cell">${r.memo || ""}</td>
+        <td>${canDel ? `<button class="btn-mini" data-del="${r._i}">삭제</button>` : ""}</td>
       </tr>`;
     }).join("")}</tbody></table>`;
   $("#journal").querySelectorAll("[data-del]").forEach((b) =>
@@ -882,13 +954,17 @@ function renderJournal() {
       const l = loadJ(); l.splice(Number(b.dataset.del), 1); saveJ(l); renderJournal();
     }));
 
-  const closed = list.filter((j) => j.sell && j.buy);
-  const pnl = closed.reduce((t, j) => t + (j.sell - j.buy) * j.qty, 0);
-  const win = closed.filter((j) => j.sell > j.buy).length;
+  const closed = list.filter((r) => r.entry && r.exit_price && r.qty);
+  const pnls = closed.map((r) => r.pnl).filter((p) => p != null);
+  const win = pnls.filter((p) => p > 0).length;
+  const total = pnls.reduce((t, p) => t + p, 0);
+  const open = list.length - closed.length;
+  const srvN = ((JOUR && JOUR.items) || []).length;
   $("#journalSum").innerHTML =
-    `청산 ${closed.length}건 · 승 ${win} / 패 ${closed.length - win}` +
-    (closed.length ? ` · 합계 <b>${(pnl >= 0 ? "+" : "") + fmt(Math.round(pnl))}원</b>` : "") +
-    ` · 미청산 ${list.length - closed.length}건`;
+    `청산 ${closed.length}건 · 승 ${win} / 패 ${pnls.length - win}` +
+    (pnls.length ? ` · 합계 <b>${(total >= 0 ? "+" : "") + fmt(Math.round(total))}원</b>` : "") +
+    ` · 미청산 ${open}건` +
+    ` · 서버 ${srvN}건 / 이 기기 ${loadJ().length}건`;
 }
 
 function addJournal() {
@@ -906,6 +982,36 @@ function addJournal() {
   saveJ(list);
   ["jCode", "jName", "jQty", "jBuy", "jStop", "jSell", "jWhy"].forEach((k) => $("#" + k).value = "");
   renderJournal();
+}
+
+/* 이 기기 기록 → CSV → GitHub 신규 파일(미리 채워짐) → 커밋 → Actions가 서버에 병합 */
+function uploadJournalCSV(copyOnly) {
+  const rows = loadJ().map(localToRow);
+  if (!rows.length) { alert("'이 기기'에 올릴 기록이 없습니다. 먼저 일지를 추가하세요."); return null; }
+  const csv = rowsToCSV(rows);
+  if (copyOnly) {
+    (navigator.clipboard ? navigator.clipboard.writeText(csv) : Promise.reject())
+      .then(() => alert("업로드할 CSV를 클립보드에 복사했습니다.\nGitHub의 data/journal/ 새 파일에 붙여넣어 커밋하세요."))
+      .catch(() => alert("클립보드 접근 불가 — CSV 내보내기로 파일을 저장해 직접 올려주세요."));
+    return null;
+  }
+  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+  const name = `upload_${stamp.slice(0, 8)}_${stamp.slice(8)}.csv`;
+  const url = `https://github.com/${REPO}/new/main?filename=${encodeURIComponent("data/journal/" + name)}&value=${encodeURIComponent(csv)}`;
+  window.open(url, "_blank", "noopener");
+  setTimeout(() => {
+    alert("GitHub 페이지에서 아래 버튼을 눌러 커밋하면 서버에 반영됩니다(약 1분).\n\n" +
+      "· 커밋 후 이 기기의 기록은 그대로 둬도 됩니다 — 서버와 자동으로 병합되어 '동기화됨'으로 표시됩니다.\n" +
+      "· 반영 확인: 새로고침 후 매매일지 상단 '서버 N건' 표시.");
+  }, 600);
+  return name;
+}
+
+function exportJournalCSV() {
+  const list = journalRows();
+  if (!list.length) { alert("내보낼 일지가 없습니다."); return; }
+  downloadCSV(`journal_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.csv`,
+    JCOLS, list.map((r) => JCOLS.map((c) => r[c] ?? "")));
 }
 
 /* 브라우저 알림 — 매수 배지 목록이 바뀌면 알려줌 */
@@ -942,6 +1048,9 @@ $("#jAdd").addEventListener("click", addJournal);
 $("#jClear").addEventListener("click", () => {
   if (confirm("일지를 모두 지울까요? 되돌릴 수 없습니다.")) { saveJ([]); renderJournal(); }
 });
+$("#jCsv").addEventListener("click", exportJournalCSV);
+$("#jPush").addEventListener("click", () => uploadJournalCSV(false));
+$("#jCopy").addEventListener("click", () => uploadJournalCSV(true));
 $("#notifyBtn").addEventListener("click", enableNotify);
 
 /* 상단 탭 — 현재 보고 있는 섹션 강조 */
@@ -980,5 +1089,6 @@ function initTabs() {
   initTabs();
   updateNotifyState();
   renderJournal();
-  await Promise.all([loadStatus(), loadToday(), loadReport(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults(), loadAdvice(), loadLearn()]);
+  await Promise.all([loadStatus(), loadToday(), loadReport(), loadSell(), loadScoreboard(), loadVerification(), loadTimeline(), loadResults(), loadAdvice(), loadLearn(), loadJournal()]);
+  renderJournal();   // 서버 journal.json 도착 후 재렌더
 })();

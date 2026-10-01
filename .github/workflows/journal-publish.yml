@@ -1,0 +1,90 @@
+name: journal-publish
+
+# data/journal/*.csv(매매일지)가 저장소에 올라오면 서버 DB에 병합하고
+# journal.json 을 다시 발행한다. 사이트 생성은 export 하나뿐이라 빠르다(수 분).
+# (스캔·리포트·알림은 daily-update 가 담당 — 여기선 알림을 보내지 않는다)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "data/journal/**"
+      - "data/journal.csv"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: journal-publish
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 의존성 설치
+        run: pip install -r requirements.txt
+
+      - name: DB 복원 (최근 artifact → 없으면 seed release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p db
+          ID=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=db&per_page=5" \
+               --jq '[.artifacts[] | select(.expired == false)][0].id // empty' || true)
+          if [ -n "${ID}" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ID}/zip" > artifact.zip
+            unzip -o artifact.zip -d db/
+            rm artifact.zip
+          elif [ ! -f db/closing_bet.db ]; then
+            gh release download seed --repo "${GITHUB_REPOSITORY}" \
+              --pattern closing_seed.zip -O seed.zip
+            unzip -o seed.zip -d db/
+            mv db/closing_seed.db db/closing_bet.db
+            rm seed.zip
+          fi
+          ls -lh db/
+
+      - name: DB 무결성 확인 (신호 0건이면 사이트를 덮어쓰지 않는다)
+        run: |
+          python - <<'PY'
+          import sqlite3, sys
+          c = sqlite3.connect("db/closing_bet.db")
+          n = c.execute("SELECT COUNT(*) FROM signals").fetchone()[0]
+          print("signals:", n)
+          sys.exit(0 if n else 1)
+          PY
+
+      - name: 일지 병합 + 사이트 생성
+        run: python run.py export
+
+      - name: Pages 아티팩트 준비
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+  deploy:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
