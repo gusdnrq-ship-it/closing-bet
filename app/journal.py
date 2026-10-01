@@ -100,10 +100,10 @@ def _extra_paths() -> list[Path]:
     return out
 
 
-def read_files(extra: list[Path] | None = None) -> tuple[list[dict], int, int]:
+def read_files(extra: list[Path] | None = None) -> tuple[list[dict], int, int, set[str]]:
     """data/journal/*.csv + data/journal.csv(구버전) + (선택)구글시트 CSV.
 
-    반환: (행 목록, 읽은 파일 수, 건너뛴 파일 수)
+    반환: (행 목록, 읽은 파일 수, 건너뛴 파일 수, 정상 읽은 출처 파일명 집합)
     헤더에 COLUMNS 16개 중 하나라도 없으면 잘못된 파일로 보고 건너뛴다
     (한글 헤더·잘못 붙여넣기 등으로 빈 행이 잔뜩 생기는 것을 방지).
     """
@@ -114,6 +114,7 @@ def read_files(extra: list[Path] | None = None) -> tuple[list[dict], int, int]:
         if p not in paths:
             paths.append(p)
     rows, used, skipped = [], 0, 0
+    sources: set[str] = set()
     for p in paths:
         try:
             text = p.read_text(encoding="utf-8-sig")
@@ -128,20 +129,30 @@ def read_files(extra: list[Path] | None = None) -> tuple[list[dict], int, int]:
             print(f"[journal] 건너뜀 {p.name}: 헤더 누락 {missing}")
             continue
         used += 1
+        sources.add(p.name)
         for raw in reader:
             clean = {(k or "").strip(): v for k, v in raw.items() if k is not None}
             if not any((v or "").strip() for v in clean.values()):
                 continue
             rows.append(_row(clean, p.name))
-    return rows, used, skipped
+    return rows, used, skipped, sources
 
 
 def merge(conn) -> dict:
-    """CSV → DB (키: date+code+signal_date+exit_date — 같은 행은 갱신)."""
+    """CSV → DB (키: date+code+signal_date+exit_date — 같은 행은 갱신).
+
+    같은 출처 파일에서 이번 실행에 사라진 행은 **삭제**한다 — 시트에서 행을 지우면
+    서버에서도 지워진다는 뜻. 단, 이번 실행에서 정상적으로 읽힌 파일에 대해서만
+    적용하므로(헤더 오류·다운로드 실패 파일은 건너뜀) 잘못 읽힌 파일이
+    데이터를 통째로 지우는 일은 없다.
+    """
     ensure(conn)
-    rows, n_files, skipped = read_files()
+    rows, n_files, skipped, sources = read_files()
     added = updated = 0
+    seen: dict[str, set[tuple]] = {}
     for r in rows:
+        key = (r["date"], r["code"], r["signal_date"], r["exit_date"])
+        seen.setdefault(r["source"], set()).add(key)
         before = conn.execute(
             "SELECT id FROM journal WHERE date=? AND code=? AND signal_date=? AND exit_date=?",
             (r["date"], r["code"], r["signal_date"], r["exit_date"]),
@@ -167,9 +178,21 @@ def merge(conn) -> dict:
             updated += 1
         else:
             added += 1
+    # 출처 파일에서 사라진 행 삭제 (시트에서 행 지우면 서버에서도 제거)
+    removed = 0
+    for src in sorted(sources):
+        keep = seen.get(src, set())
+        stale = conn.execute(
+            "SELECT id, date, code, signal_date, exit_date FROM journal WHERE source=?",
+            (src,),
+        ).fetchall()
+        for row in stale:
+            if (row["date"], row["code"], row["signal_date"], row["exit_date"]) not in keep:
+                conn.execute("DELETE FROM journal WHERE id=?", (row["id"],))
+                removed += 1
     conn.commit()
     return {"files": n_files, "rows": len(rows), "added": added,
-            "updated": updated, "skipped": skipped}
+            "updated": updated, "removed": removed, "skipped": skipped}
 
 
 def load(conn) -> list[dict]:
