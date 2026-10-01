@@ -1,0 +1,3 @@
+date,code,name,strategy,signal_date,side,entry,qty,stop,target,exit_date,exit_price,exit_reason,pnl,pnl_pct,memo
+2026-10-01,027830,호전산업,bnf_oversold,2026-10-01,BUY,746,100,737,,2026-10-02,780,목표,,,60일선 도달
+2026-10-02,006370,쌍굴전략,ssanggul_bollinger,2026-10-02,BUY,5000,10,4800,,,,,,,보유중

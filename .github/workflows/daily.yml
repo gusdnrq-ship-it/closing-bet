@@ -5,6 +5,11 @@ on:
     - cron: "0 7 * * 1-5"    # UTC 07:00 = 한국 16:00 — 장 마감 직후 (스캔·자문 즉시 갱신)
     - cron: "0 12 * * 1-5"   # UTC 12:00 = 한국 21:00 — 판정 확정 후 최종 갱신
   workflow_dispatch:
+    inputs:
+      sheet_url:
+        description: "구글시트 게시 CSV URL (비워 두면 저장소 변수 SHEET_CSV_URL)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -56,7 +61,28 @@ jobs:
           fi
           ls -lh db/
 
+      - name: 구글시트 CSV 가져오기 (선택 · 저장소 변수 SHEET_CSV_URL)
+        id: sheet
+        env:
+          SHEET_CSV_URL: ${{ inputs.sheet_url || vars.SHEET_CSV_URL }}
+        run: |
+          set -uo pipefail
+          if [ -z "${SHEET_CSV_URL:-}" ]; then
+            echo "SHEET_CSV_URL 미설정 → 구글시트 연동 생략"
+            echo "path=" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          out="$RUNNER_TEMP/sheet.csv"
+          if curl -fsSL --max-time 60 "$SHEET_CSV_URL" -o "$out" && [ -s "$out" ]; then
+            echo "구글시트 CSV 수신: $(wc -c < "$out") bytes"
+            echo "path=$out" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::구글시트 CSV 가져오기 실패 — 기존 저장소 데이터로 계속"
+            echo "path=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 갱신 + 스캔 + 정적 발행
+        env:
+          JOURNAL_EXTRA_CSV: ${{ steps.sheet.outputs.path }}
         run: |
           python run.py refresh
           python run.py scan

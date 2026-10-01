@@ -11,6 +11,11 @@ on:
       - "data/journal/**"
       - "data/journal.csv"
   workflow_dispatch:
+    inputs:
+      sheet_url:
+        description: "구글시트 게시 CSV URL (비워 두면 저장소 변수 SHEET_CSV_URL)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -68,7 +73,28 @@ jobs:
           sys.exit(0 if n else 1)
           PY
 
+      - name: 구글시트 CSV 가져오기 (선택 · 저장소 변수 SHEET_CSV_URL)
+        id: sheet
+        env:
+          SHEET_CSV_URL: ${{ inputs.sheet_url || vars.SHEET_CSV_URL }}
+        run: |
+          set -uo pipefail
+          if [ -z "${SHEET_CSV_URL:-}" ]; then
+            echo "SHEET_CSV_URL 미설정 → 구글시트 연동 생략"
+            echo "path=" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          out="$RUNNER_TEMP/sheet.csv"
+          if curl -fsSL --max-time 60 "$SHEET_CSV_URL" -o "$out" && [ -s "$out" ]; then
+            echo "구글시트 CSV 수신: $(wc -c < "$out") bytes"
+            echo "path=$out" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::구글시트 CSV 가져오기 실패 — 기존 저장소 데이터로 계속"
+            echo "path=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 일지 병합 + 사이트 생성
+        env:
+          JOURNAL_EXTRA_CSV: ${{ steps.sheet.outputs.path }}
         run: python run.py export
 
       - name: Pages 아티팩트 준비

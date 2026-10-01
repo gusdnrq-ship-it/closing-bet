@@ -9,6 +9,8 @@
   3. push(data/journal/**) → Actions(journal-publish)가 python run.py export 실행
   4. 이 모듈이 CSV를 DB에 병합하고 journal.json 발행 → 사이트가 서버 일지를 읽음
   5. learn(발전형 게이트)이 실현 성적을 참고 자료로 함께 보여줌
+  6. (선택) 구글시트 연동 — 방식 A: 앱스 스크립트가 data/journal/sheet.csv 를 커밋(2번 경유)
+                    방식 B: Actions가 시트 게시 CSV를 내려받아 JOURNAL_EXTRA_CSV 로 바로 병합
 """
 from __future__ import annotations
 
@@ -87,29 +89,57 @@ def _row(raw: dict, source: str) -> dict:
     return r
 
 
-def read_files() -> tuple[list[dict], int]:
-    """data/journal/*.csv 와 data/journal.csv(구버전)를 모두 읽는다."""
+def _extra_paths() -> list[Path]:
+    """Actions에서 내려받은 구글시트 CSV(환경변수 JOURNAL_EXTRA_CSV, 콤마 구분)."""
+    import os
+    out = []
+    for part in (os.environ.get("JOURNAL_EXTRA_CSV") or "").split(","):
+        part = part.strip()
+        if part and Path(part).is_file():
+            out.append(Path(part))
+    return out
+
+
+def read_files(extra: list[Path] | None = None) -> tuple[list[dict], int, int]:
+    """data/journal/*.csv + data/journal.csv(구버전) + (선택)구글시트 CSV.
+
+    반환: (행 목록, 읽은 파일 수, 건너뛴 파일 수)
+    헤더에 COLUMNS 16개 중 하나라도 없으면 잘못된 파일로 보고 건너뛴다
+    (한글 헤더·잘못 붙여넣기 등으로 빈 행이 잔뜩 생기는 것을 방지).
+    """
     paths = sorted(JOURNAL_DIR.glob("*.csv")) if JOURNAL_DIR.exists() else []
     if LEGACY_CSV.exists():
         paths = [LEGACY_CSV, *paths]
-    rows, n = [], 0
+    for p in (extra if extra is not None else _extra_paths()):
+        if p not in paths:
+            paths.append(p)
+    rows, used, skipped = [], 0, 0
     for p in paths:
         try:
             text = p.read_text(encoding="utf-8-sig")
         except OSError:
+            skipped += 1
             continue
-        for raw in csv.DictReader(text.splitlines()):
-            if not any((v or "").strip() for v in raw.values()):
+        reader = csv.DictReader(text.splitlines())
+        fields = [(f or "").strip() for f in (reader.fieldnames or [])]
+        missing = [c for c in COLUMNS if c not in fields]
+        if missing:
+            skipped += 1
+            print(f"[journal] 건너뜀 {p.name}: 헤더 누락 {missing}")
+            continue
+        used += 1
+        for raw in reader:
+            clean = {(k or "").strip(): v for k, v in raw.items() if k is not None}
+            if not any((v or "").strip() for v in clean.values()):
                 continue
-            rows.append(_row(raw, p.name))
-            n += 1
-    return rows, len(paths)
+            rows.append(_row(clean, p.name))
+    return rows, used, skipped
 
 
 def merge(conn) -> dict:
     """CSV → DB (키: date+code+signal_date+exit_date — 같은 행은 갱신)."""
     ensure(conn)
-    rows, n_files = read_files()
+    rows, n_files, skipped = read_files()
     added = updated = 0
     for r in rows:
         before = conn.execute(
@@ -138,7 +168,8 @@ def merge(conn) -> dict:
         else:
             added += 1
     conn.commit()
-    return {"files": n_files, "rows": len(rows), "added": added, "updated": updated}
+    return {"files": n_files, "rows": len(rows), "added": added,
+            "updated": updated, "skipped": skipped}
 
 
 def load(conn) -> list[dict]:
