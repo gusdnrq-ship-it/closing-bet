@@ -20,7 +20,7 @@
     {
       "code": "003580",
       "name": "HLB글로벌",
-      "strategy": "breakout",
+      "strategy": "bnf_oversold",
       "side": "BUY",
       "qty": 100,
       "price_type": "LIMIT",
@@ -32,11 +32,11 @@
       "invested_pct": 24.0,
       "max_loss": 154000,
       "conf_mult": 1.25,
-      "conf_note": "사후 확정 통과 (사후 54.2%, 95% 47.7~60.6% > 기준선 46.89%) — 한도 25%",
+      "conf_note": "사후 확정 통과 (사후 54.2%, 95% 47.7~60.6% > 기준선 45.99%) — 한도 25%",
       "risk_budget": 30000,
       "max_pos": 750000,
       "signal_date": "2026-09-28",
-      "note": "3조건 충족..."
+      "note": "검증 58.3% · 기준선 45.99% 통과 (breakout은 현재 전량 제외)"
     }
   ],
   "caveats": ["본 자문은 참고자료이며 매매 추천이 아니다...", "..."]

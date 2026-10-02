@@ -45,7 +45,7 @@ def export_api(conn=None) -> dict:
             {**dict(r), "name": None, "market": None}
             for r in conn.execute(
                 "SELECT s.signal_date, s.code, s.strategy, s.direction, s.entry_close, "
-                "s.status, s.settle_date, s.settle_close, s.reason "
+                "s.entry_price, s.status, s.settle_date, s.settle_close, s.reason "
                 "FROM signals s ORDER BY s.signal_date DESC, s.id DESC LIMIT 5000"
             ).fetchall()
         ]

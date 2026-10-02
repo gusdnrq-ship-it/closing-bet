@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS signals (
     code         TEXT NOT NULL,
     strategy     TEXT NOT NULL,
     direction    TEXT NOT NULL,   -- UP / DOWN
-    entry_close  REAL NOT NULL,
+    entry_close  REAL NOT NULL,   -- 신호일 종가 (참고)
+    entry_price  REAL,            -- A1 진입가: 신호 다음 거래일 시가 (확정 전 NULL)
     reason       TEXT,
     status       TEXT NOT NULL DEFAULT 'PENDING',  -- PENDING / HIT / MISS / VOID
     settle_date  TEXT,
@@ -64,6 +65,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
     cols = {r[1] for r in conn.execute("PRAGMA table_info(stocks)")}
     if "manage_date" not in cols:
         conn.execute("ALTER TABLE stocks ADD COLUMN manage_date TEXT")
+    cols2 = {r[1] for r in conn.execute("PRAGMA table_info(signals)")}
+    if "entry_price" not in cols2:
+        # A1 판정 기준: 진입가 = T+1 시가 (기존 entry_close는 신호일 종가로 유지)
+        conn.execute("ALTER TABLE signals ADD COLUMN entry_price REAL")
     conn.commit()
 
 

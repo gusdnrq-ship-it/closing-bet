@@ -1,8 +1,13 @@
-"""전략 백테스트 — 과거 N거래일 전 종목 재생해 익일 종가 판정.
+"""전략 백테스트 — 과거 N거래일 전 종목 재생해 A1 기준 판정.
 
-스캔은 '최신 거래일'에만 시그널을 만들지만, 백테스트는 전 거래일을 재생한다.
-판정 규칙은 scanner.settle_pending과 동일: UP→익일 종가 상승이면 HIT,
-동일가면 VOID. 신호일의 익일 데이터가 없으면(마지막 거래일) 제외.
+판정 기준(A1, 실체결 정합):
+  진입 = 신호 다음 거래일 시가(open[i+1])   ← 자문의 진입가와 동일
+  판정 = 그 날 종가(close[i+1])
+  UP→종가가 시가보다 높으면 HIT, 같으면 VOID.
+
+(구 기준 C2C: 신호일 종가 → 익일 종가는 폐기. report.BASELINE 46.89%도
+ 같은 데이터로 재현되지 않아 2026-10-02 scripts/recompute_baseline.py로
+ 재계산 — 새 기준선 45.99%(A1).)
 """
 from app import data
 from app.signals import base as strategies
@@ -44,8 +49,10 @@ def run(conn, strategy_names: list[str] | None = None, days: int = 360) -> dict:
                 continue
             hits = [i for i in range(max(start_i, 0), len(df) - 1) if bool(cond.iloc[i])]
             for i in hits:
-                entry = df["close"].iloc[i]
-                nxt = df["close"].iloc[i + 1]
+                entry = df["open"].iloc[i + 1]    # 진입: T+1 시가 (실체결)
+                nxt = df["close"].iloc[i + 1]     # 판정: 같은 날 종가
+                if not entry or entry <= 0 or nxt is None:
+                    continue                      # 무거래일·데이터 결측 캔들 제외
                 stat["trades"] += 1
                 stat["dates"].append(df.index[i].strftime("%Y-%m-%d"))
                 stat["returns"].append((nxt - entry) / entry * 100)
@@ -66,7 +73,8 @@ def run(conn, strategy_names: list[str] | None = None, days: int = 360) -> dict:
             }
             continue
         settled = s["HIT"] + s["MISS"] + s["VOID"]
-        hit_rate = (s["HIT"] / settled * 100) if settled else None
+        decisive = s["HIT"] + s["MISS"]           # VOID(동일가) 제외 — 기준선 정의와 동일
+        hit_rate = (s["HIT"] / decisive * 100) if decisive else None
         entry = {
             "display_name": meta["display_name"],
             "caveats": meta["caveats"],

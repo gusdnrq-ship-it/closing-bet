@@ -37,7 +37,9 @@ async function loadToday() {
   const d = await staticApi("today");
   CACHE.today = d;
   renderHero();
-  $("#todayDate").textContent = d.date ? `${d.date} 종가 기준 → 다음 거래일 종가로 판정` : "";
+  $("#todayDate").textContent = d.date
+    ? `${d.date} 시그널 → 다음 거래일 시가 진입 · 같은 날 종가 판정`
+    : "";
   $("#rankNote").textContent = d.rank_note || "";
   if (!d.items.length) {
     $("#today").innerHTML = `<div class="empty">오늘 발생한 시그널이 없습니다. (스캔을 실행했거나 신호 없음)</div>`;
@@ -50,14 +52,14 @@ async function loadToday() {
         <a class="to-report" href="#star-${s.code}">해석 ↓</a></td>
       <td class="${ADVICE_CLS[s.action] || ""}"><b>${s.action_ko || "-"}</b></td>
       <td class="dir-${s.direction}">${s.direction === "UP" ? "오름 ↑" : "내림 ↓"}</td>
-      <td>${fmt(s.entry_close)}</td>
+      <td>${s.entry_price != null ? fmt(s.entry_price) : "-"}</td>
       <td title="이격도 = 60일 평균 대비 · RSI = 오른 힘 (70↑ 과열 / 30↓ 과매도)"
           style="cursor:help">${s.dev ?? "-"} / ${s.rsi ?? "-"}</td>
       <td class="st-${s.status}">${STATUS_KO[s.status]}</td>
     </tr>`).join("");
   $("#today").className = "card table-wrap";
   $("#today").innerHTML = `<table><thead><tr>
-    <th>종목 / 전략</th><th>자문</th><th>방향</th><th>진입 종가</th><th>이격도 / RSI</th><th>결과</th>
+    <th>종목 / 전략</th><th>자문</th><th>방향</th><th>진입가(시가)</th><th>이격도 / RSI</th><th>결과</th>
     </tr></thead><tbody>${rows}</tbody></table>
     <div class="note">자문 = <b>매수</b>만 실행 대상 · 관망은 관찰 · 제외는 손대지 않음
       (근거는 각 행의 자문 단계에서 확인)</div>`;
@@ -203,7 +205,7 @@ function renderHero() {
   const today = CACHE.today;
   const stars = CACHE.report && CACHE.report.stars && CACHE.report.stars.items || [];
   const score = CACHE.scoreboard;
-  const baseline = (CACHE.report && CACHE.report.baseline && CACHE.report.baseline.hit_rate) || 46.89;
+  const baseline = (CACHE.report && CACHE.report.baseline && CACHE.report.baseline.hit_rate) || 45.99;
 
   const items = (today && today.items) || [];
   const selected = items.filter((x) => x.selected);
@@ -485,7 +487,7 @@ async function loadResults() {
       <td><b>${r.name || r.code}</b> <span class="tag">${r.code}</span></td>
       <td>${STRAT_KO[r.strategy] || r.strategy}</td>
       <td class="dir-${r.direction}">${r.direction === "UP" ? "오름 ↑" : "내림 ↓"}</td>
-      <td>${fmt(r.entry_close)}</td>
+      <td>${fmt(r.entry_price || r.entry_close)}</td>
       <td>${r.settle_date || "-"}</td>
       <td>${fmt(r.settle_close)}</td>
       <td>${r.change_pct == null ? "-" : (r.change_pct > 0 ? "+" : "") + r.change_pct + "%"}</td>
@@ -523,7 +525,7 @@ function renderStockSignals(sigs) {
         <td>${s.signal_date}</td>
         <td>${STRAT_KO[s.strategy] || s.strategy}</td>
         <td class="dir-${s.direction}">${s.direction === "UP" ? "오름 ↑" : "내림 ↓"}</td>
-        <td>${fmt(s.entry_close)}</td>
+        <td>${fmt(s.entry_price || s.entry_close)}</td>
         <td class="st-${s.status}">${STATUS_KO[s.status]}</td>
         <td>${fmt(s.settle_close)}</td>
       </tr>`).join("")

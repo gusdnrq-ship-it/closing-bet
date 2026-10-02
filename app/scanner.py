@@ -27,18 +27,24 @@ def _parse(d: str) -> date:
 
 
 def settle_pending(conn, now: datetime | None = None) -> dict:
-    """PENDING 시그널을 익일(다음 거래일) 종가로 판정.
+    """PENDING + A1 이행 대상 시그널을 다음 거래일로 판정.
+
+    A1: 진입 = T+1 시가(open) → 판정 = 그 날 종가(close). entry_price가
+    비어 있는 기존(C2C) 판정 건은 한 번 더 재판정해 A1로 정합시킨다.
 
     장중에는 오늘 날짜의 미완성 캔들로 판정하지 않는다 (stayed).
     """
     eff = _now_kst(now)
     today = eff.strftime("%Y-%m-%d")
     closed = _market_closed(eff)
-    rows = conn.execute("SELECT * FROM signals WHERE status='PENDING'").fetchall()
+    rows = conn.execute(
+        "SELECT * FROM signals "
+        "WHERE status='PENDING' OR (entry_price IS NULL AND settle_date IS NOT NULL)"
+    ).fetchall()
     counts = {"HIT": 0, "MISS": 0, "VOID": 0, "stayed": 0}
     for s in rows:
         nxt = conn.execute(
-            "SELECT date, close FROM ohlcv WHERE code=? AND date>? ORDER BY date LIMIT 1",
+            "SELECT date, open, close FROM ohlcv WHERE code=? AND date>? ORDER BY date LIMIT 1",
             (s["code"], s["signal_date"]),
         ).fetchone()
         if nxt is not None and nxt["date"] == today and not closed:
@@ -56,7 +62,9 @@ def settle_pending(conn, now: datetime | None = None) -> dict:
                 counts["stayed"] += 1
             continue
 
-        entry, nxt_close = s["entry_close"], nxt["close"]
+        # A1 판정: 진입 = T+1 시가 → 판정 = 그 날 종가 (실체결 정합)
+        entry = nxt["open"] or s["entry_price"] or s["entry_close"]
+        nxt_close = nxt["close"]
         if nxt_close == entry:
             status = "VOID"
         elif s["direction"] == "UP":
@@ -64,12 +72,22 @@ def settle_pending(conn, now: datetime | None = None) -> dict:
         else:
             status = "HIT" if nxt_close < entry else "MISS"
         conn.execute(
-            "UPDATE signals SET status=?, settle_date=?, settle_close=? WHERE id=?",
-            (status, nxt["date"], nxt_close, s["id"]),
+            "UPDATE signals SET status=?, settle_date=?, settle_close=?, entry_price=? WHERE id=?",
+            (status, nxt["date"], nxt_close, entry, s["id"]),
         )
         counts[status] += 1
     conn.commit()
     return counts
+
+
+def _entry_price(conn, code: str, signal_date: str) -> float | None:
+    """진입가(신호 다음 거래일 시가). 진입일 데이터가 아직 없으면 NULL
+    → 자문은 '진입가 미확정'으로 보고하고, settle 시 확정된다."""
+    row = conn.execute(
+        "SELECT open FROM ohlcv WHERE code=? AND date>? ORDER BY date LIMIT 1",
+        (code, signal_date),
+    ).fetchone()
+    return float(row["open"]) if row and row["open"] else None
 
 
 def run_scan(conn, strategy_names: list[str] | None = None, now: datetime | None = None) -> dict:
@@ -112,9 +130,10 @@ def run_scan(conn, strategy_names: list[str] | None = None, now: datetime | None
                 continue
             cur = conn.execute(
                 "INSERT OR IGNORE INTO signals "
-                "(signal_date, code, strategy, direction, entry_close, reason, status, created) "
-                "VALUES(?,?,?,?,?,?, 'PENDING', ?)",
+                "(signal_date, code, strategy, direction, entry_close, entry_price, reason, status, created) "
+                "VALUES(?,?,?,?,?,?,?, 'PENDING', ?)",
                 (last_date, code, name, sig["direction"], df["close"].iloc[-1],
+                 _entry_price(conn, code, last_date),
                  sig.get("reason", ""), db.now()),
             )
             new_signals += cur.rowcount

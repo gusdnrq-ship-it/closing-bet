@@ -1,10 +1,11 @@
 """실전 실행 자문 — 오늘 후보에 '매수 / 관망 / 제외'와 진입·손절·목표 가격을 붙인다.
 
-판단 근거 (전부 5년 재실행 검증 결과, docs/20260929_분석리포트.md):
+판단 근거 (5년 재실행, 2026-10-02 A1 재계산 — scripts/recompute_experiment.py):
 - 거래정지·관리종목 지정 종목은 어떤 경우에도 제외 (실전 투자 규칙 — 백테스트 미반영)
 - 방향이 '내림(DOWN)'인 신호는 공매도 미지원 → 제외
-- 전략 게이트: BNF 검증 57.0% (n=24,550) 통과 / breakout 전체 45.8% = 기준선(46.89%) 하회
-  → breakout은 '돌파폭≥10% & 5일대금≥100억 & RSI≥80' 3조건 동시 충족(검증 51.3%, n=2,040)에만 허용
+- 전략 게이트: BNF 검증 58.3% (n=24,534) 통과 / breakout 전체 42.0% = 기준선(45.99%) −4.0p 미달
+  → breakout은 '돌파폭≥10% & 5일대금≥100억 & RSI≥80' 3조건도 A1 검증 40.2% < 기준선 → 조건부 승격 폐지
+    (구 C2C 기준에선 51.3%로 승격했으나 시가 진입에서 반전) → breakout 전량 제외
   → 쌍굴파기 검증 n=152 = 표본 부족 → 제외
 - 종목 위험 배지 '위험'(이격도 130↑·RSI 70↑·거래량 5배↑ 등 2개 이상)은 어떤 경우에도 제외
 - 손절선=신호 이전 60거래일 최저 / 목표가=60일 이동평균 — 자금 보호 수단이며
@@ -19,20 +20,21 @@ import config
 from app import data, db, report
 from app.signals import bnf_oversold
 
-BASELINE = report.BASELINE["hit_rate"]   # 46.89
+BASELINE = report.BASELINE["hit_rate"]   # 45.99 (A1 재계산)
 
-# 전략 게이트 (5년 재실행 · 검증기간 적중률)
+# 전략 게이트 (5년 재실행 · A1 검증기간 적중률)
 GATE = {
-    "breakout": {"val": 45.8, "n": 69_063, "state": "미달",
-                 "detail": "breakout 전체 검증 45.8% < 기준선 46.89%"},
-    "bnf_oversold": {"val": 57.0, "n": 24_550, "state": "통과",
-                     "detail": "BNF 검증 57.0% (개발 57.8 → 검증 57.0, 과적합 아님)"},
-    "ssanggul_bollinger": {"val": 67.8, "n": 152, "state": "표본부족",
+    "breakout": {"val": 42.0, "n": 69_086, "state": "미달",
+                 "detail": "breakout 전체 검증 42.0% < 기준선 45.99% (갭업 진입 평균 −0.46%p)"},
+    "bnf_oversold": {"val": 58.3, "n": 24_534, "state": "통과",
+                     "detail": "BNF 검증 58.3% (개발 59.0 → 검증 58.3, 과적합 아님)"},
+    "ssanggul_bollinger": {"val": 58.5, "n": 152, "state": "표본부족",
                            "detail": "쌍굴 검증 n=152 — 통계적 유의성 없음"},
 }
-# breakout 조건부 허용 조건 (검증 51.3%, n=2,040)
+# breakout 조건부 허용 조건 — A1 검증 40.2%(n=1,982) < 기준선이므로 승격 근거 없음.
+# val >= BASELINE이어야 _gate가 조건부 승격을 허용한다 (재계산으로 근거가 살아나면 자동 복귀).
 COND = {"dist_high": 10.0, "money5": 10_000_000_000, "rsi": 80.0,
-        "val": 51.3, "n": 2_040}
+        "val": 40.2, "n": 1_982}
 
 # 신뢰도 배율 — 게이트 사후 상태에 따라 사이즈를 키우거나 줄인다.
 # 1회 리스크 1%는 절대 상한(더 키우지 않는다), 종목 한도는 배율만큼 변동한다.
@@ -132,7 +134,11 @@ def _gate(it: dict, gates: dict | None = None) -> dict:
         # 실전이 기준선 미달로 확정 → 3조건 예외도 보류
         static["state"], static["detail"] = "미달", detail + " — 조건부 예외도 보류"
         return static
-    if cond_ok:
+
+    # 조건부 승격의 근거 성립 여부 — A1 검증 적중률이 기준선을 넘어야만 승격한다.
+    cond_valid = COND["val"] >= BASELINE
+
+    if cond_ok and cond_valid:
         if learned_state == "통과":
             static["state"] = "통과"
             static["detail"] = (f"{detail} · 3조건 충족(돌파폭≥{COND['dist_high']:.0f}% & "
@@ -148,7 +154,12 @@ def _gate(it: dict, gates: dict | None = None) -> dict:
     if learned_state == "통과":
         static["state"], static["detail"] = "통과", detail
         return static
+
     static["state"] = "미달"
+    if cond_ok:
+        static["detail"] = (f"3조건은 충족하나 검증 {COND['val']}% < 기준선 {BASELINE}% — "
+                            f"승격 근거 없음 (A1 시가 진입 재계산)")
+        return static
     static["detail"] = (f"조건부 허용 조건 미충족 ({', '.join(miss)}) — {static['detail']}"
                         if miss else static["detail"])
     return static
@@ -185,8 +196,20 @@ def confidence(gates: dict | None, strategy: str, gate_state: str,
     return CONF["base"], "기본 사이즈"
 
 
+def _entry_from_ohlcv(conn, code: str, signal_date: str | None) -> float | None:
+    """진입가(신호 다음 거래일 시가) — signals.entry_price가 비어 있을 때 폴백 조회."""
+    if conn is None or not signal_date:
+        return None
+    row = conn.execute(
+        "SELECT open FROM ohlcv WHERE code=? AND date>? ORDER BY date LIMIT 1",
+        (code, signal_date),
+    ).fetchone()
+    return float(row["open"]) if row and row["open"] else None
+
+
 def _decide(it: dict, risk: dict, gate: dict, stop, target,
-            risk_pct: float | None = None, r_mult: float | None = None) -> tuple[str, list[str]]:
+            risk_pct: float | None = None, r_mult: float | None = None,
+            entry: float | None = None) -> tuple[str, list[str]]:
     reasons: list[str] = []
 
     if it.get("direction") != "UP":
@@ -204,17 +227,17 @@ def _decide(it: dict, risk: dict, gate: dict, stop, target,
     if risk["cls"] == "mid":
         reasons.append(f"주의: {', '.join(risk['why'])} — 손절선 엄수")
 
-    if not it.get("entry_close"):
+    if not entry:
         return "WATCH", reasons + ["진입가(신호 다음 거래일 시가) 미확정 — 장 시작 후 확인"]
     if stop is None or target is None:
         return "WATCH", reasons + ["손절선·목표가 산출 불가 — 데이터 확인 후 판단"]
-    if stop >= it["entry_close"]:
+    if stop >= entry:
         return "SKIP", reasons + [
-            f"손절선 {stop:,.0f}이 진입가 {it['entry_close']:,.0f} 이상 — "
+            f"손절선 {stop:,.0f}이 진입가 {entry:,.0f} 이상 — "
             "진입 즉시 손절 조건 (최근 저점을 이미 하회)"]
-    if target <= it["entry_close"]:
+    if target <= entry:
         return "WATCH", reasons + [
-            f"목표(60일선) {target:,.0f}가 진입가 {it['entry_close']:,.0f} 이하 — "
+            f"목표(60일선) {target:,.0f}가 진입가 {entry:,.0f} 이하 — "
             "즉시 목표 도달하면 손실. 시간 매도(20거래일)만 남음"]
     if r_mult is not None and r_mult < 1:
         return "WATCH", reasons + [
@@ -268,7 +291,8 @@ def build(conn, today: dict, rep: dict | None, sell: dict, gates: dict | None = 
         gate = _gate(it, gates)
         stop, target = _levels(conn, it["code"], it["signal_date"], sell_by)
 
-        entry = it.get("entry_close")
+        entry = it.get("entry_price") or _entry_from_ohlcv(
+            conn, it["code"], it.get("signal_date"))
         risk_pct = None
         r_mult = None
         if entry and stop and entry > stop:
@@ -279,7 +303,7 @@ def build(conn, today: dict, rep: dict | None, sell: dict, gates: dict | None = 
         if it["code"] in blocked:
             action, reasons = "SKIP", [blocked[it["code"]]]
         else:
-            action, reasons = _decide(it, risk, gate, stop, target, risk_pct, r_mult)
+            action, reasons = _decide(it, risk, gate, stop, target, risk_pct, r_mult, entry)
         conf_mult, conf_note = confidence(gates, it["strategy"], gate["state"])
         if action == "BUY" and conf_mult != 1:
             reasons.append(f"게이트 신뢰도 ×{conf_mult} — {conf_note}")

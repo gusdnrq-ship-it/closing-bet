@@ -1,7 +1,7 @@
 """발전형 게이트 — 실전 판정이 쌓이면 전략의 통과 여부를 스스로 갱신한다.
 
 핵심: 백테스트 검증승률을 **사전분포(pseudo-count)**, 실전 판정(HIT/MISS)을 **관측**으로
-결합해 승률의 베이지안 사후분포를 추정하고, 그 구간(95%)이 기준선(46.89%)을
+결합해 승률의 베이지안 사후분포를 추정하고, 그 구간(95%)이 기준선(45.99% · A1)을
 어느 쪽으로 벗어나는지에 따라 게이트를 바꾼다.
 
 - 사후 하단 > 기준선  → 통과  (실전도 기준선을 넘었다고 95% 확신)
@@ -21,13 +21,13 @@ import math
 
 from app import report as _report
 
-BASELINE = _report.BASELINE["hit_rate"]   # 46.89
+BASELINE = _report.BASELINE["hit_rate"]   # 45.99 (A1)
 
-# 백테스트 5년 재실행 검증승률(docs/20260929_분석리포트.md) — 사전분포의 중심
+# 백테스트 5년 재실행 A1 검증승률(scripts/recompute_experiment.py, 2026-10-02) — 사전분포의 중심
 PRIOR = {
-    "breakout": 45.8,
-    "bnf_oversold": 57.0,
-    "ssanggul_bollinger": 67.8,
+    "breakout": 42.0,
+    "bnf_oversold": 58.3,
+    "ssanggul_bollinger": 58.5,
 }
 PRIOR_N = 200          # 사전분포의 유효 표본 크기 (실전이 이보다 커야 주도권이 넘어감)
 PRIOR_N_WEAK = 30      # 백테스트가 '표본 부족'으로 판정한 전략 — 사전을 약하게만 씀

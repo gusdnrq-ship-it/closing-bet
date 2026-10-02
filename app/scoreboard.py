@@ -2,7 +2,7 @@
 
 신뢰도 계산:
 - Wilson 95% 신뢰구간 — 표본이 적을수록 구간이 넓어져 '우연'임이 드러난다.
-- 기준선(무작위 46.89%) 대비 2-proportion z-검정 — |z| < 1.96이면 '기준선과
+- 기준선(무작위 45.99% · A1) 대비 2-proportion z-검정 — |z| < 1.96이면 '기준선과
   차이 없음(유의하지 않음)'으로 표기한다. 기준선을 넘는 것처럼 보여도 유의하지
   않으면 '무작위와 같다'고 말한다 (정직성 원칙).
 """
@@ -11,7 +11,7 @@ import math
 from app import db, ranker
 from app.signals import base as strategies
 
-BASELINE = 46.89  # report.BASELINE["hit_rate"]와 일치 (무작위로 찍어도 맞는 확률)
+BASELINE = 45.99  # report.BASELINE["hit_rate"]와 일치 (A1 시가 진입 무작위 적중률)
 
 
 def _warn(settled: int) -> str | None:
@@ -120,10 +120,19 @@ def today_candidates(conn) -> dict:
     ).fetchall()
     items = []
     for r in rows:
+        entry_price = r["entry_price"]
+        if not entry_price:
+            # 진입일(신호 다음 거래일) 데이터가 이미 있으면 시가로 확정해 표시
+            row = conn.execute(
+                "SELECT open FROM ohlcv WHERE code=? AND date>? ORDER BY date LIMIT 1",
+                (r["code"], r["signal_date"]),
+            ).fetchone()
+            entry_price = float(row["open"]) if row and row["open"] else None
         items.append({
             "code": r["code"], "name": r["name"], "market": r["market"],
             "strategy": r["strategy"], "direction": r["direction"],
-            "entry_close": r["entry_close"], "reason": r["reason"],
+            "entry_close": r["entry_close"], "entry_price": entry_price,
+            "reason": r["reason"],
             "status": r["status"], "signal_date": r["signal_date"],
             "settle_date": r["settle_date"], "settle_close": r["settle_close"],
         })
@@ -142,11 +151,12 @@ def recent_results(conn, limit: int = 60) -> list[dict]:
         {
             "signal_date": r["signal_date"], "code": r["code"], "name": r["name"],
             "market": r["market"], "strategy": r["strategy"], "direction": r["direction"],
-            "entry_close": r["entry_close"], "status": r["status"],
+            "entry_close": r["entry_close"], "entry_price": r["entry_price"],
+            "status": r["status"],
             "settle_date": r["settle_date"], "settle_close": r["settle_close"],
             "change_pct": (
-                round((r["settle_close"] / r["entry_close"] - 1) * 100, 2)
-                if r["settle_close"] else None
+                round((r["settle_close"] / (r["entry_price"] or r["entry_close"]) - 1) * 100, 2)
+                if r["settle_close"] and (r["entry_price"] or r["entry_close"]) else None
             ),
             "reason": r["reason"],
         }
@@ -157,7 +167,7 @@ def recent_results(conn, limit: int = 60) -> list[dict]:
 def stock_detail(conn, code: str, limit: int = 260) -> dict | None:
     st = conn.execute("SELECT * FROM stocks WHERE code=?", (code,)).fetchone()
     sigs = conn.execute(
-        "SELECT signal_date, strategy, direction, status, entry_close, settle_close "
+        "SELECT signal_date, strategy, direction, status, entry_close, entry_price, settle_close "
         "FROM signals WHERE code=? ORDER BY signal_date DESC LIMIT 50", (code,)
     ).fetchall()
     bars = conn.execute(
